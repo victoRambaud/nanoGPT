@@ -2,6 +2,9 @@
 # https://github.com/HazyResearch/flash-attention/blob/main/training/src/datamodules/language_modeling_hf.py
 
 import os
+os.environ["HF_HOME"] = "/lustre/fswork/projects/rech/fku/uir17ua/data"
+
+
 from tqdm import tqdm
 import numpy as np
 import tiktoken
