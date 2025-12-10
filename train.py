@@ -351,12 +351,12 @@ if __name__ == "__main__":
     blimp_eval_iter = 10 * eval_interval
     while True:
 
-        if iter_num % blimp_eval_iter == 0 and master_process:
-            blimp_results = blimp_evaluator.evaluate_blimp_all()
-            if wandb_log:
-                wandb.log(
-                    {"iter": iter_num, **blimp_results}
-                )
+        # if iter_num % blimp_eval_iter == 0 and master_process:
+        #     blimp_results = blimp_evaluator.evaluate_blimp_all()
+        #     if wandb_log:
+        #         wandb.log(
+        #             {"iter": iter_num, **blimp_results}
+        #         )
 
         # determine and set the learning rate for this iteration
         lr = get_lr(iter_num) if decay_lr else learning_rate
