@@ -582,10 +582,10 @@ class RotationModule(nn.Module):
             # "tanh_alpha": self.theta_act.alpha.detach().cpu().item(),
             # "tanh_gamma": self.theta_act.gamma.detach().cpu().item(),
             # "tanh_gamma": self.theta_act..detach().cpu().item(),
-            "max_freq": freqs.detach().max().item(),
-            "min_freq": freqs.detach().min().item(),
-            "mean_freq": freqs.detach().mean().item(),
-            "var_freq": freqs.detach().var().item(),
+            # "max_freq": freqs.detach().max().item(),
+            # "min_freq": freqs.detach().min().item(),
+            # "mean_freq": freqs.detach().mean().item(),
+            # "var_freq": freqs.detach().var().item(),
         }
     
     def rotate_qk(

@@ -116,7 +116,7 @@ class CausalSelfAttention(nn.Module):
             thetaS, _, th, rot_dict = self.rotation_module(x)
             q, k = self.rotation_module.rotate_qk(thetaS, q, k)
             # q, k, theta, th, (tt, ttt), rot_dict = self.rotate_qk(x, q, k)
-            out_dict["theta"] = th
+            # out_dict["theta"] = th
             for ke, va in rot_dict.items():
                 out_dict[ke] = va
 
@@ -253,9 +253,9 @@ class Transformer(nn.Module):
         out_dict_main = dict()
         for i, block in enumerate(self.blocks):
             x, out_dict = block(x, padding_mask, temperature=temperature)
-            for k, v in out_dict.items():
-                out_dict_main[f"{k}_layer{str(i)}"] = v
+            # for k, v in out_dict.items():
+            #     out_dict_main[f"{k}_layer{str(i)}"] = v
         
-        if temperature is not None:
-            out_dict_main["temperature"] = temperature
+        # if temperature is not None:
+        #     out_dict_main["temperature"] = temperature
         return self.out_norm(x), out_dict_main
