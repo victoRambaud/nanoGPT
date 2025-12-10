@@ -52,7 +52,7 @@ if __name__ == "__main__":
     wandb_mode = "offline"
 
     # data
-    dataset = "openwebtext"
+    dataset = "openwebtext_data_folder"
     gradient_accumulation_steps = 5 * 8  # used to simulate larger batch sizes
     batch_size = 12  # if gradient_accumulation_steps > 1, this is the micro-batch size
     block_size = 1024
