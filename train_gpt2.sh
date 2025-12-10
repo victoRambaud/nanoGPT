@@ -1,8 +1,9 @@
 #!/bin/bash
-#SBATCH --job-name=PRETRAIN
-#SBATCH -A bxp@h100
-##SBATCH -A bxp@v100
-##SBATCH -A bxp@cpu
+#SBATCH --output=TravailGPU%j.out # fichier de sortie (%j = job ID)
+#SBATCH --error=TravailGPU%j.err # fichier d’erreur (%j = job ID)
+#SBATCH --job-name=PRETRAIN_GPT2
+#SBATCH --account=fku@h100
+##SBATCH -A fku@cpu
 
 ##SBATCH --partition=gpu_p2
 ##SBATCH --partition=gpu_p4
@@ -20,7 +21,7 @@
 #SBATCH --hint=nomultithread
 
 #SBATCH --qos=qos_gpu_h100-dev 
-#SBATCH --time=2:00:00
+#SBATCH --time=20:00:00
 #SBATCH --output=logs/gpu_job%j.out
 #SBATCH --error=errors/gpu_job%j.out
 
@@ -30,7 +31,7 @@
 
 module load arch/h100
 module load pytorch-gpu/py3/2.6.0
-export PYTHONPATH=/lustre/fswork/projects/rech/bxp/uir17ua/python_libs:$PYTHONPATH
+export PYTHONPATH=/lustre/fswork/projects/rech/fku/uir17ua/python_libs:$PYTHONPATH
 
 
 # source activate mfa
