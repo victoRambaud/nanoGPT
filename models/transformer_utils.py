@@ -71,7 +71,7 @@ class TransformerConfig:
     g_act_fn: str = "relu"
     diag_block_size: int = 2  # for velocity intrinsic dimension
     merge: str = "mul"
-    woorking_memory: bool = False  # if we learn RoPE like rotations on keys and queries
+    working_memory: bool = False  # if we learn RoPE like rotations on keys and queries
     sensory_attention: bool = False
 
     dt_rank: Optional[int] = None

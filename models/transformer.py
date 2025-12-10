@@ -96,7 +96,7 @@ class CausalSelfAttention(nn.Module):
                     1, 1, config.block_size, config.block_size
                 ),
             )
-        if config.woorking_memory:
+        if config.working_memory:
             self.rotation_module = RotationModule(config, layer_index=layer_index)
 
     def forward(self, x, padding_mask: Optional[torch.Tensor] = None, temperature: Optional[float]=None):
@@ -112,7 +112,7 @@ class CausalSelfAttention(nn.Module):
         v = v.view(B, T, self.n_head, C // self.n_head)
 
         out_dict = dict()
-        if self.config.woorking_memory:
+        if self.config.working_memory:
             thetaS, _, th, rot_dict = self.rotation_module(x)
             q, k = self.rotation_module.rotate_qk(thetaS, q, k)
             # q, k, theta, th, (tt, ttt), rot_dict = self.rotate_qk(x, q, k)
