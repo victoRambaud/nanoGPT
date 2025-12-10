@@ -5,8 +5,6 @@ import time
 
 from typing import *
 
-import torch_parallel_scan as tps
-
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
@@ -18,8 +16,7 @@ from models.transformer_utils import (
     TransformerConfig,
     LayerNorm,
     Block,
-    RotationModule,
-    naive_cum_sum
+    RotationModule
 )
 from typing import Optional
         
