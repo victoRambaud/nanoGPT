@@ -167,8 +167,8 @@ class CausalSelfAttention(nn.Module):
             if self.cope is not None:
                 attn_weight = attn_weight + self.cope(q, attn_weight)
 
-            if not self.training:
-                out_dict["attn_weight_x"] = attn_weight
+            # if not self.training:
+            #     out_dict["attn_weight_x"] = attn_weight
             temperature = temperature if temperature is not None else self.temperature
             attn_weight = torch.softmax(
                 attn_weight / temperature,
@@ -182,13 +182,13 @@ class CausalSelfAttention(nn.Module):
 
         # output projection
         y = self.resid_dropout(self.c_proj(y))
-        out_dict["attn_time"] = time.time() - ts
-        out_dict["attn_weight"] = attn_weight
+        # out_dict["attn_time"] = time.time() - ts
+        # out_dict["attn_weight"] = attn_weight
 
-        out_dict["att_x_norm"] = attn_weight.abs().mean(dim=(-2, -1)).mean().item()
-        out_dict["q_norm"] = q.norm(dim=-1).mean().item()
-        out_dict["k_norm"] = k.norm(dim=-1).mean().item()
-        return y, out_dict
+        # out_dict["att_x_norm"] = attn_weight.abs().mean(dim=(-2, -1)).mean().item()
+        # out_dict["q_norm"] = q.norm(dim=-1).mean().item()
+        # out_dict["k_norm"] = k.norm(dim=-1).mean().item()
+        return y, {}
 
 
 class Transformer(nn.Module):
