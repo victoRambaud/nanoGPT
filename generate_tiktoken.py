@@ -23,28 +23,29 @@ def load_local_tiktoken(load_path: str = "gpt2_tiktoken_full.json") -> tiktoken.
     return enc
 
 
-enc = tiktoken.get_encoding("gpt2")
+if __name__ == "__main__":
+    enc = tiktoken.get_encoding("gpt2")
 
-save_path = "gpt2_tiktoken_full.json"
+    save_path = "gpt2_tiktoken_full.json"
 
-data = {
-    "name": enc.name,
-    "pat_str": enc._pat_str,
-    "mergeable_ranks": {
-        base64.b64encode(k).decode(): v
-        for k, v in enc._mergeable_ranks.items()
-    },
-    "special_tokens": enc._special_tokens,
-    "n_vocab": enc.n_vocab,
-}
+    data = {
+        "name": enc.name,
+        "pat_str": enc._pat_str,
+        "mergeable_ranks": {
+            base64.b64encode(k).decode(): v
+            for k, v in enc._mergeable_ranks.items()
+        },
+        "special_tokens": enc._special_tokens,
+        "n_vocab": enc.n_vocab,
+    }
 
-with open(save_path, "w") as f:
-    json.dump(data, f)
+    with open(save_path, "w") as f:
+        json.dump(data, f)
 
-print("Saved GPT-2 tokenizer to", save_path)
-print(enc.encode("your sentence here"))
+    print("Saved GPT-2 tokenizer to", save_path)
+    print(enc.encode("your sentence here"))
 
-enc = load_local_tiktoken()
+    enc = load_local_tiktoken()
 
-print("Loaded tokenizer:", enc)
-print(enc.encode("your sentence here"))
+    print("Loaded tokenizer:", enc)
+    print(enc.encode("your sentence here"))
