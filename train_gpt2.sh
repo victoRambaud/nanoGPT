@@ -29,8 +29,8 @@
 
 
 module load arch/h100
-module load pytorch-gpu/py3/2.8.0
-export PYTHONPATH=/lustre/fswork/projects/rech/bxp/ubm84dh/python_libs:$PYTHONPATH
+module load pytorch-gpu/py3/2.6.0
+export PYTHONPATH=/lustre/fswork/projects/rech/bxp/uir17ua/python_libs:$PYTHONPATH
 
 
 # source activate mfa
