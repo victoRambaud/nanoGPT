@@ -10,22 +10,22 @@ from tqdm.auto import tqdm
 from typing import Dict, Any
 
 from models.gpt import GPT
-from generate_tiktoken import load_local_tiktoken
 
 
 class BlimpEvaluator:
     def __init__(
         self,
         model: GPT,
-        device: torch.DeviceObjType,
+        enc: tiktoken.Encoding,
+        device: str = "cuda",
         blim_save_path: str = "/lustre/fsmisc/dataset/HuggingFace/blimp/",
         max_seq_len: int = 1024
     ):
         
-        self.device = device
+        self.device = torch.device(device)
         self.model = model
         
-        self.enc = load_local_tiktoken("/lustre/fswork/projects/rech/fku/uir17ua/dev/nanoGPT/gpt2_tiktoken_full.json")
+        self.enc = enc
         self.model = self.model.to(device)
         self.model.eval()
         self.max_seq_len = max_seq_len
@@ -102,9 +102,9 @@ class BlimpEvaluator:
         accuracy = correct / total if total > 0 else float("nan")
 
         return {
-            f"blimp_{blimp_subset}_accuracy": accuracy,
-            f"blimp_{blimp_subset}_correct": correct,
-            f"blimp_{blimp_subset}_total": total,
+            f"{blimp_subset}_accuracy": accuracy,
+            f"{blimp_subset}_correct": correct,
+            f"{blimp_subset}_total": total,
         }
 
     def evaluate_blimp_all(
@@ -121,7 +121,7 @@ class BlimpEvaluator:
         total_correct = 0
         total_items = 0
 
-        for subset in os.listdir(self.blim_save_path):
+        for subset in os.listdir(self.blim_save_path)[:5]:
             res = self.evaluate_blimp_subset(
                 blimp_subset=subset,
                 device=device,
@@ -132,13 +132,11 @@ class BlimpEvaluator:
             total_correct += res[f"{subset}_correct"]
             total_items += res[f"{subset}_total"]
 
-        results["overall"] = {
-            "blimp_overall_accuracy": (
-                total_correct / total_items if total_items > 0 else float("nan")
-            ),
-            "blimp_overall_correct": total_correct,
-            "blimp_overall_total": total_items,
-        }
+        results["overall_accuracy"] = (
+            total_correct / total_items if total_items > 0 else float("nan")
+        )
+        results["overall_correct"] = total_correct
+        results["overall_total"] = total_items
 
         print("Overall BLiMP accuracy:", results["overall_accuracy"])
         return results

@@ -351,12 +351,12 @@ if __name__ == "__main__":
     blimp_eval_iter = 10 * eval_interval
     while True:
 
-        # if iter_num % blimp_eval_iter == 0 and master_process:
-        #     blimp_results = blimp_evaluator.evaluate_blimp_all()
-        #     if wandb_log:
-        #         wandb.log(
-        #             {"iter": iter_num, **blimp_results}
-        #         )
+        if iter_num % blimp_eval_iter == 0 and master_process:
+            blimp_results = blimp_evaluator.evaluate_blimp_all()
+            if wandb_log:
+                wandb.log(
+                    {"iter": iter_num, **blimp_results}
+                )
 
         # determine and set the learning rate for this iteration
         lr = get_lr(iter_num) if decay_lr else learning_rate
@@ -381,6 +381,8 @@ if __name__ == "__main__":
                 )
             if losses["val"] < best_val_loss or always_save_checkpoint:
                 best_val_loss = losses["val"]
+                checkpoint_dir = os.path.join(out_dir, f"{wandb_run_name}/checkpoint-{iter_num}")
+                os.makedirs(checkpoint_dir, exist_ok=True)
                 # if iter_num > 0:
                 checkpoint = {
                     "model": raw_model.state_dict(),
@@ -392,6 +394,12 @@ if __name__ == "__main__":
                 }
                 print(f"saving checkpoint to {out_dir}")
                 torch.save(checkpoint, os.path.join(out_dir, "ckpt.pt"))
+                print(f"Logging checkpoint to WandB as artifact...")
+                # Log the entire directory as a model artifact
+                artifact = wandb.Artifact(f'model-checkpoint-{iter_num}', type='model')
+                artifact.add_dir(checkpoint_dir)
+                wandb.log_artifact(artifact)
+                wandb.log({"checkpoint/last_saved_step": iter_num}, step=iter_num)
         if iter_num == 0 and eval_only:
             break
 
