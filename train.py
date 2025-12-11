@@ -21,6 +21,7 @@ import time
 import math
 import pickle
 from contextlib import nullcontext
+import random
 
 import numpy as np
 import torch
@@ -337,7 +338,7 @@ if __name__ == "__main__":
     # logging
     if wandb_log and master_process:
         import wandb
-
+        wandb_run_name = wandb_run_name + f"id_{random.randint(0, 1000)}"
         wandb.init(
             project=wandb_project, name=wandb_run_name, config=config, mode=wandb_mode
         )
