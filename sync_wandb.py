@@ -57,7 +57,7 @@ if __name__ == "__main__":
         help="Directory containing wandb run folders.",
     )
     parser.add_argument(
-        "--last", type=int, default=None, help="Only sync the last N runs."
+        "--last", type=int, default=1, help="Only sync the last N runs."
     )
 
     args = parser.parse_args()
