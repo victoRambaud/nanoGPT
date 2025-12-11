@@ -566,14 +566,7 @@ class RotationModule(nn.Module):
 
     def forward_sins(self, theta: torch.Tensor):
         freqs = torch.sqrt(self.freqs**2)
-        theta = theta * freqs#.clamp(1e-6, 2*math.pi)
-        M = torch.zeros(
-            *theta.size(),
-            self.config.diag_block_size,
-            self.config.diag_block_size,
-            dtype=theta.dtype,
-            device=theta.device
-        )
+        theta = theta * freqs
         cos = torch.cos(theta)
         sin = torch.sin(theta)
         M = (cos, sin)

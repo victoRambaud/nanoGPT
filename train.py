@@ -63,9 +63,9 @@ if __name__ == "__main__":
     n_embd = 768
     dropout = 0.0  # for pretraining 0 is good, for finetuning try 0.1+
     bias = False  # do we use bias inside LayerNorm and Linear layers?
-    rope: bool = True
+    rope: bool = False
     cope: bool = False
-    working_memory: bool = False
+    working_memory: bool = True
     n_approx_steps: int = -1
     dt_rank: int = 16
     base_freq = block_size
@@ -381,17 +381,17 @@ if __name__ == "__main__":
                 )
             if losses["val"] < best_val_loss or always_save_checkpoint:
                 best_val_loss = losses["val"]
-                if iter_num > 0:
-                    checkpoint = {
-                        "model": raw_model.state_dict(),
-                        "optimizer": optimizer.state_dict(),
-                        "model_args": model_args,
-                        "iter_num": iter_num,
-                        "best_val_loss": best_val_loss,
-                        "config": config,
-                    }
-                    print(f"saving checkpoint to {out_dir}")
-                    torch.save(checkpoint, os.path.join(out_dir, "ckpt.pt"))
+                # if iter_num > 0:
+                checkpoint = {
+                    "model": raw_model.state_dict(),
+                    "optimizer": optimizer.state_dict(),
+                    "model_args": model_args,
+                    "iter_num": iter_num,
+                    "best_val_loss": best_val_loss,
+                    "config": config,
+                }
+                print(f"saving checkpoint to {out_dir}")
+                torch.save(checkpoint, os.path.join(out_dir, "ckpt.pt"))
         if iter_num == 0 and eval_only:
             break
 
