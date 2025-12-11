@@ -68,7 +68,7 @@ if __name__ == "__main__":
     cope: bool = False
     working_memory: bool = True
     n_approx_steps: int = -1
-    dt_rank: int = 16
+    dt_rank: int = 32
     base_freq = block_size
     block_max_init: float = 1.0
     block_layer_scaling_ratio: float = 0.
