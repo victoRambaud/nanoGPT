@@ -12,7 +12,7 @@ def sync_run(run_path: str):
         print(f"[ERROR] Sync failed for {run_path}: {e}")
 
 
-def sync_all_runs(base_dir="wandb", last_n: int | None = None):
+def sync_all_runs(base_dir="wandb", last_n = None):
     if not os.path.exists(base_dir):
         print(f"No such directory: {base_dir}")
         return
