@@ -115,7 +115,7 @@ class BlimpEvaluator:
         total_correct = 0
         total_items = 0
 
-        for subset in os.listdir(self.blim_save_path)[:5]:
+        for subset in os.listdir(self.blim_save_path):
             res = self.evaluate_blimp_subset(
                 blimp_subset=subset,
                 device=device,
