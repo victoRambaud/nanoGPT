@@ -21,7 +21,7 @@
 #SBATCH --hint=nomultithread
 
 #SBATCH --qos=qos_gpu_h100-dev 
-#SBATCH --time=20:00:00
+#SBATCH --time=2:00:00
 #SBATCH --output=logs/gpu_job%j.out
 #SBATCH --error=errors/gpu_job%j.out
 
