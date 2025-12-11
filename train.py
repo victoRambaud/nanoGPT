@@ -39,13 +39,15 @@ if __name__ == "__main__":
     # -----------------------------------------------------------------------------
     # default config values designed to train a gpt2 (124M) on OpenWebText
     # I/O
-    out_dir = "out"
+    # out_dir = "out"
+    out_dir = "/lustre/fswork/projects/rech/fku/uir17ua/dev/nanoGPT/out/ROPE_L12_n768id_123"
     eval_interval = 2000
     log_interval = 1
     eval_iters = 200
     eval_only = False  # if True, script exits right after the first eval
     always_save_checkpoint = True  # if True, always save a checkpoint after each eval
-    init_from = "scratch"  # 'scratch' or 'resume' or 'gpt2*'
+    init_from = "resume"  # 'scratch' or 'resume' or 'gpt2*'
+    # init_from = "scratch"  # 'scratch' or 'resume' or 'gpt2*'
 
     # wandb logging
     wandb_log = True  # disabled by default
@@ -396,10 +398,10 @@ if __name__ == "__main__":
                 torch.save(checkpoint, os.path.join(out_dir, "ckpt.pt"))
                 print(f"Logging checkpoint to WandB as artifact...")
                 # Log the entire directory as a model artifact
-                artifact = wandb.Artifact(f'model-checkpoint-{iter_num}', type='model')
-                artifact.add_file(os.path.join(out_dir, "ckpt.pt"))
-                wandb.log_artifact(artifact)
-                wandb.log({"checkpoint/last_saved_step": iter_num}, step=iter_num)
+                # artifact = wandb.Artifact(f'model-checkpoint-{iter_num}', type='model')
+                # artifact.add_file(os.path.join(out_dir, "ckpt.pt"))
+                # wandb.log_artifact(artifact)
+                # wandb.log({"checkpoint/last_saved_step": iter_num}, step=iter_num)
         if iter_num == 0 and eval_only:
             break
 
