@@ -1,80 +1,43 @@
+#!/usr/bin/env python3
 import os
 import sys
 import subprocess
-import logging
 
 
-# --- Setup ---
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-)
-
-
-def sync_all_offline_runs(wandb_root_dir):
+def sync_wandb_runs(base_dir="wandb"):
     """
-    Executes the 'wandb sync' command on the specified root directory
-    to upload all unsynced offline runs to the WandB server.
-    """
-    logging.info(f"Starting WandB synchronization for directory: {wandb_root_dir}")
+    Sync all offline W&B runs stored under `wandb/`.
 
-    if not os.path.isdir(wandb_root_dir):
-        logging.error(f"Error: WandB directory not found at {wandb_root_dir}")
-        logging.error(
-            "Please ensure you are running this script from the project root or provide the correct path."
-        )
+    Looks for folders named 'offline-run-*' and syncs each via:
+        python -m wandb sync <run_path>
+    """
+
+    if not os.path.exists(base_dir):
+        print(f"No wandb directory found at: {base_dir}")
         return
 
-    # The wandb CLI tool handles the discovery and synchronization of all
-    # nested offline runs when pointed at the root directory.
-    try:
-        # Construct the command
-        command = ["wandb", "sync", wandb_root_dir]
+    runs = [
+        os.path.join(base_dir, d)
+        for d in os.listdir(base_dir)
+        if d.startswith("offline-run")
+    ]
 
-        logging.info(f"Executing command: {' '.join(command)}")
+    if not runs:
+        print("No offline W&B runs found to sync.")
+        return
 
-        # Execute the command and capture output
-        result = subprocess.run(
-            command,
-            check=False,  # Do not raise an exception for non-zero exit codes (WandB might exit 1 if no unsynced runs)
-            capture_output=True,
-            text=True,
-        )
+    print(f"Found {len(runs)} offline runs to sync.\n")
 
-        # Print the standard output and error output
-        logging.info("--- WandB Sync Output ---")
-        print(result.stdout)
+    for run in runs:
+        print(f"=== Syncing: {run} ===")
+        try:
+            subprocess.run([sys.executable, "-m", "wandb", "sync", run], check=True)
+        except subprocess.CalledProcessError as e:
+            print(f"Failed to sync {run}: {e}")
+        print()
 
-        if result.stderr and "Error" in result.stderr:
-            logging.error("--- WandB Sync Error Output ---")
-            print(result.stderr)
-
-        if result.returncode == 0:
-            # Note: The 'wandb sync' command inherently checks the status of each run
-            # and only uploads data that has not been completely synced yet.
-            logging.info(
-                "Synchronization process completed successfully. Only unsynced parts were uploaded."
-            )
-        else:
-            logging.warning(
-                f"Synchronization process finished with return code {result.returncode}. Check output for details."
-            )
-
-    except FileNotFoundError:
-        logging.error(
-            "Error: 'wandb' command not found. Please ensure Weights & Biases CLI is installed and in your PATH."
-        )
-    except Exception as e:
-        logging.error(f"An unexpected error occurred during sync: {e}")
+    print("Done syncing all offline runs.")
 
 
 if __name__ == "__main__":
-
-    # Check for command line argument for a custom path
-    if len(sys.argv) > 1:
-        sync_path = sys.argv[1]
-    else:
-        # Default to the standard location in the current working directory
-        sync_path = "wandb"
-        logging.info(f"No directory specified. Defaulting to: {sync_path}")
-
-    sync_all_offline_runs(sync_path)
+    sync_wandb_runs()
