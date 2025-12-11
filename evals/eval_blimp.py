@@ -7,7 +7,7 @@ import torch.nn.functional as F
 
 import datasets
 from tqdm.auto import tqdm
-from typing import Dict, Any
+from typing import Dict, Any, List
 
 from models.gpt import GPT
 
@@ -66,10 +66,8 @@ class BlimpEvaluator:
 
         logits, _ = self.model(context)  # (1, T-1, V)
 
-        #print(logits.shape, context.shape, targets.shape)
-        nll = F.cross_entropy(
-                logits.view(-1, logits.size(-1)), targets.view(-1), ignore_index=-1
-            )
+        print(logits.shape, context.shape, targets.shape)
+        nll = F.cross_entropy(logits.view(-1, logits.size(-1)), targets.view(-1), ignore_index=-1)
         return nll.item()
 
     @torch.no_grad()
