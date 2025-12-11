@@ -89,7 +89,7 @@ class BlimpEvaluator:
             if not math.isfinite(log_p_good) and not math.isfinite(log_p_bad):
                 continue
 
-            if log_p_good > log_p_bad:
+            if log_p_good < log_p_bad:
                 correct += 1
             total += 1
 
