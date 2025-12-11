@@ -7,7 +7,7 @@ import torch.nn.functional as F
 
 import datasets
 from tqdm.auto import tqdm
-from typing import Dict, Any, List
+from typing import Dict, Any, Optional
 
 from models.gpt import GPT
 
@@ -21,7 +21,8 @@ class BlimpEvaluator:
         enc_path: str = "/lustre/fswork/projects/rech/fku/uir17ua/dev/nanoGPT/gpt2_tiktoken_full.json",
         device: str = "cuda",
         blim_save_path: str = "/lustre/fsmisc/dataset/HuggingFace/blimp/",
-        max_seq_len: int = 1024
+        max_seq_len: int = 1024,
+        n_datasets: Optional[int] = None
     ):
         
         self.device = torch.device(device)
@@ -34,6 +35,7 @@ class BlimpEvaluator:
 
         self.blim_save_path = blim_save_path
         self.criterion = nn.CrossEntropyLoss(reduction="sum")
+        self.n_datasets = n_datasets
 
     def encode(self, text: str) -> list[int]:
         return self.enc.encode(text)
@@ -115,7 +117,11 @@ class BlimpEvaluator:
         total_correct = 0
         total_items = 0
 
-        for subset in os.listdir(self.blim_save_path):
+        ds_list = os.listdir(self.blim_save_path)
+        if self.n_datasets is not None:
+            ds_list = ds_list[:self.n_datasets]
+            
+        for subset in ds_list:
             res = self.evaluate_blimp_subset(
                 blimp_subset=subset,
                 device=device,
