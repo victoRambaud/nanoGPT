@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --output=TravailGPU%j.out # fichier de sortie (%j = job ID)
 #SBATCH --error=TravailGPU%j.err # fichier d’erreur (%j = job ID)
-#SBATCH --job-name=PRETRAIN_GPT2
+#SBATCH --job-name=WorkMem
 #SBATCH --account=fku@h100
 ##SBATCH -A fku@cpu
 
