@@ -61,12 +61,12 @@ class BlimpEvaluator:
 
         # Predict tokens 1..T-1 from 0..T-2
         # context: ids[:-1], targets: ids[1:]
-        context = torch.tensor(ids[:-1], dtype=torch.long, device=device).unsqueeze(0)
-        targets = torch.tensor(ids[1:], dtype=torch.long, device=device).unsqueeze(0)
+        context = torch.tensor(ids[:-1], dtype=torch.long, device=device)#.unsqueeze(0)
+        targets = torch.tensor(ids[1:], dtype=torch.long, device=device)#.unsqueeze(0)
 
         logits, _ = self.model(context)  # (1, T-1, V)
 
-        print(logits.shape, context.shape, targets.shape)
+        # print(logits.shape, context.shape, targets.shape)
         nll = F.cross_entropy(logits.view(-1, logits.size(-1)), targets.view(-1), ignore_index=-1)
         return nll.item()
 

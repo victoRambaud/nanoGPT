@@ -348,10 +348,9 @@ if __name__ == "__main__":
     local_iter_num = 0  # number of iterations in the lifetime of this process
     raw_model = model.module if ddp else model  # unwrap DDP container if needed
     running_mfu = -1.0
-    blimp_eval_iter = 10 * eval_interval
     while True:
 
-        if iter_num % blimp_eval_iter == 0 and master_process:
+        if iter_num % eval_interval == 0 and master_process:
             blimp_results = blimp_evaluator.evaluate_blimp_all()
             if wandb_log:
                 wandb.log(
