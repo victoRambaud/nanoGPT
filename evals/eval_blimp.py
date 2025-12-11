@@ -66,7 +66,22 @@ class BlimpEvaluator:
 
         logits, _ = self.model(context)  # (1, T-1, V)
 
-        # print(logits.shape, context.shape, targets.shape)
+        print(logits.shape, context.shape, targets.shape)
+        print(logits.shape, context.shape, targets.shape)
+        print(logits.shape, context.shape, targets.shape)
+        print(logits.shape, context.shape, targets.shape)
+        print(logits.shape, context.shape, targets.shape)
+        print(logits.shape, context.shape, targets.shape)
+        print(logits.shape, context.shape, targets.shape)
+        print(logits.shape, context.shape, targets.shape)
+        print(logits.shape, context.shape, targets.shape)
+        print(logits.shape, context.shape, targets.shape)
+        print(logits.shape, context.shape, targets.shape)
+        print(logits.shape, context.shape, targets.shape)
+        print(logits.shape, context.shape, targets.shape)
+        print(logits.shape, context.shape, targets.shape)
+        print(logits.shape, context.shape, targets.shape)
+        print(logits.shape, context.shape, targets.shape)
         nll = F.cross_entropy(logits.view(-1, logits.size(-1)), targets.view(-1), ignore_index=-1)
         return nll.item()
 
