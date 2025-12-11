@@ -11,12 +11,14 @@ from typing import Dict, Any
 
 from models.gpt import GPT
 
+from generate_tiktoken import load_local_tiktoken
+
 
 class BlimpEvaluator:
     def __init__(
         self,
         model: GPT,
-        enc: tiktoken.Encoding,
+        enc_path: str = "/lustre/fswork/projects/rech/fku/uir17ua/dev/nanoGPT/gpt2_tiktoken_full.json",
         device: str = "cuda",
         blim_save_path: str = "/lustre/fsmisc/dataset/HuggingFace/blimp/",
         max_seq_len: int = 1024
@@ -25,7 +27,7 @@ class BlimpEvaluator:
         self.device = torch.device(device)
         self.model = model
         
-        self.enc = enc
+        self.enc = load_local_tiktoken(enc_path)
         self.model = self.model.to(device)
         self.model.eval()
         self.max_seq_len = max_seq_len
