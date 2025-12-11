@@ -58,32 +58,10 @@ class BlimpEvaluator:
 
         if len(ids) < 2:
             return float("-inf")
-
-        # Predict tokens 1..T-1 from 0..T-2
-        # context: ids[:-1], targets: ids[1:]
         context = torch.tensor(ids[:-1], dtype=torch.long, device=device).unsqueeze(0)
         targets = torch.tensor(ids[1:], dtype=torch.long, device=device).unsqueeze(0)
-        b, l = context.shape
 
-        logits, _ = self.model(context)  # (1, T-1, V)
-
-        print(logits.shape, context.shape, targets.shape)
-        print(logits.shape, context.shape, targets.shape)
-        print(logits.shape, context.shape, targets.shape)
-        print(logits.shape, context.shape, targets.shape)
-        print(logits.shape, context.shape, targets.shape)
-        print(logits.shape, context.shape, targets.shape)
-        print(logits.shape, context.shape, targets.shape)
-        print(logits.shape, context.shape, targets.shape)
-        print(logits.shape, context.shape, targets.shape)
-        print(logits.shape, context.shape, targets.shape)
-        print(logits.shape, context.shape, targets.shape)
-        print(logits.shape, context.shape, targets.shape)
-        print(logits.shape, context.shape, targets.shape)
-        print(logits.shape, context.shape, targets.shape)
-        print(logits.shape, context.shape, targets.shape)
-        print(logits.shape, context.shape, targets.shape)
-        nll = F.cross_entropy(logits.view(b, l, -1), targets.view(-1), ignore_index=-1)
+        _, nll = self.model(context, targets)  # (1, T-1, V)
         return nll.item()
 
     @torch.no_grad()
