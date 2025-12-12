@@ -394,7 +394,7 @@ if __name__ == "__main__":
                     "config": config,
                 }
                 print(f"saving checkpoint to {out_dir}")
-                torch.save(checkpoint, os.path.join(out_dir, "ckpt.pt"))
+                torch.save(checkpoint, os.path.join(checkpoint_dir, "ckpt.pt"))
                 print(f"Logging checkpoint to WandB as artifact...")
                 # Log the entire directory as a model artifact
                 # artifact = wandb.Artifact(f'model-checkpoint-{iter_num}', type='model')
