@@ -83,7 +83,7 @@ if __name__ == "__main__":
         wandb_run_name = f"ROPE_L{n_layer}_n{n_embd}"
 
     # adamw optimizer
-    learning_rate = 6e-4  # max learning rate
+    learning_rate = 5e-4  # max learning rate
     max_iters = 600000  # total number of training iterations
     weight_decay = 1e-1
     beta1 = 0.9
@@ -92,9 +92,9 @@ if __name__ == "__main__":
 
     # learning rate decay settings
     decay_lr = True  # whether to decay the learning rate
-    warmup_iters = 2000  # how many steps to warm up for
+    warmup_iters = 4000  # how many steps to warm up for
     lr_decay_iters = 600000  # should be ~= max_iters per Chinchilla
-    min_lr = 6e-5  # minimum learning rate, should be ~= learning_rate/10 per Chinchilla
+    min_lr = 1e-5  # minimum learning rate, should be ~= learning_rate/10 per Chinchilla
 
     # DDP settings
     backend = "nccl"  # 'nccl', 'gloo', etc.
@@ -302,7 +302,7 @@ if __name__ == "__main__":
         model=model,
         device=device,
         max_seq_len=block_size,
-        n_datasets=7
+        n_datasets=None
     )
     # helps estimate an arbitrarily accurate loss over either split using many batches
     @torch.no_grad()
