@@ -302,7 +302,7 @@ if __name__ == "__main__":
         model=model,
         device=device,
         max_seq_len=block_size,
-        n_datasets=None
+        n_datasets=7
     )
     # helps estimate an arbitrarily accurate loss over either split using many batches
     @torch.no_grad()
