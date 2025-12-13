@@ -34,6 +34,7 @@ class TransformerConfig:
         False  # used only in SSM attention if we want to also add positional embeddings
     )
     block_size: int = 1024
+    rope_theta: int = 2*4096
     vocab_size: int = (
         50304  # GPT-2 vocab_size of 50257, padded up to nearest multiple of 64 for efficiency
     )
