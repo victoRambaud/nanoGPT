@@ -83,7 +83,7 @@ class CausalSelfAttention(nn.Module):
         # self.flash = False
 
         self.rotary_emb = (
-            RotaryEmbedding(dim=self.head_dim // 2, theta=config.block_max_init, theta=2048) if config.rope else None
+            RotaryEmbedding(dim=self.head_dim // 2, theta=config.block_max_init, theta=1024) if config.rope else None
         )
         if not self.flash:
             print(
