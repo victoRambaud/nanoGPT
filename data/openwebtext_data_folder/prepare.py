@@ -63,16 +63,16 @@ if __name__ == '__main__':
         desc="tokenizing the splits",
         num_proc=num_proc,
     )
-
+    total_batches = 4096
     # concatenate all the ids in each dataset into one large file we can use for training
     main_path = "/lustre/fswork/projects/rech/fku/uir17ua/data"
     for split, dset in tokenized.items():
         arr_len = np.sum(dset['len'], dtype=np.uint64)
 
-        filename = os.path.join(os.path.dirname(__file__), f'{split}.bin')
+        filename = os.path.join(os.path.dirname(__file__), f'{split}_{total_batches}.bin')
         dtype = np.uint16 # (can do since enc.max_token_value == 50256 is < 2**16)
         arr = np.memmap(filename, dtype=dtype, mode='w+', shape=(arr_len,))
-        total_batches = 1024
+        
 
         idx = 0
         for batch_idx in tqdm(range(total_batches), desc=f'writing {filename}'):
