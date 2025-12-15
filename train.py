@@ -165,20 +165,23 @@ if __name__ == "__main__":
     data_dir = os.path.join("data", dataset)
 
 
-    def get_batch(split: str) -> Tuple[torch.Tensor, torch.Tensor]:
+    def get_batch(split: str, blk_sz=None) -> Tuple[torch.Tensor, torch.Tensor]:
         # We recreate np.memmap every batch to avoid a memory leak, as per
         # https://stackoverflow.com/questions/45132940/numpy-memmap-memory-usage-want-to-iterate-once/61472122#61472122
+        if blk_sz is None:
+            blk_sz = block_size
         if split == "train":
             data = np.memmap(os.path.join(data_dir, "train.bin"), dtype=np.uint16, mode="r")
         else:
             data = np.memmap(os.path.join(data_dir, "val.bin"), dtype=np.uint16, mode="r")
-        ix = torch.randint(len(data) - block_size, (batch_size,))
+        
+        ix = torch.randint(len(data) - blk_sz, (batch_size,))
         x = torch.stack(
-            [torch.from_numpy((data[i : i + block_size]).astype(np.int64)) for i in ix]
+            [torch.from_numpy((data[i : i + blk_sz]).astype(np.int64)) for i in ix]
         )
         y = torch.stack(
             [
-                torch.from_numpy((data[i + 1 : i + 1 + block_size]).astype(np.int64))
+                torch.from_numpy((data[i + 1 : i + 1 + blk_sz]).astype(np.int64))
                 for i in ix
             ]
         )
@@ -309,14 +312,24 @@ if __name__ == "__main__":
     def estimate_loss() -> Dict:
         out = {}
         model.eval()
-        for split in ["train", "val"]:
-            losses = torch.zeros(eval_iters)
-            for k in range(eval_iters):
-                X, Y = get_batch(split)
-                with ctx:
-                    logits, loss = model(X, Y)
-                losses[k] = loss.item()
-            out[split] = losses.mean()
+        split_size_dict = {
+            "train": (1,),
+            "val": (1, 2, 4, 8, 16),
+        }
+        for split, block_muls in split_size_dict.items():
+            for m in block_muls:
+                losses = torch.zeros(eval_iters)
+                for k in range(eval_iters):
+                    blk_sz = block_size * m
+                    X, Y = get_batch(split, blk_sz=blk_sz)
+                    with ctx:
+                        logits, loss = model(X, Y)
+                    losses[k] = loss.item()
+                if m > 1:
+                    out_split = f"split_{str(blk_sz)}"
+                else:
+                    out_split = split
+                out[out_split] = losses.mean()
         model.train()
         return out
 
@@ -371,15 +384,14 @@ if __name__ == "__main__":
                 f"step {iter_num}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}"
             )
             if wandb_log:
-                wandb.log(
-                    {
-                        "iter": iter_num,
-                        "train/loss": losses["train"],
-                        "val/loss": losses["val"],
-                        "lr": lr,
-                        "mfu": running_mfu * 100,  # convert to percentage
-                    }
-                )
+                wandb_dict = {
+                    "iter": iter_num,
+                    "train/loss": losses["train"],
+                    "val/loss": losses["val"],
+                    "lr": lr,
+                    "mfu": running_mfu * 100,  # convert to percentage
+                }
+                wandb.log(wandb_dict)
             if losses["val"] < best_val_loss or always_save_checkpoint:
                 best_val_loss = losses["val"]
                 checkpoint_dir = os.path.join(out_dir, f"{wandb_run_name}/checkpoint-{iter_num}")
