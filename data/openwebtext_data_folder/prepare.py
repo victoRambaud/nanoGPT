@@ -13,6 +13,7 @@ from datasets import load_dataset # huggingface datasets
 # number of workers in .map() call
 # good number to use is ~order number of cpu cores // 2
 num_proc = 8
+save_train_and_val = True
 
 # number of workers in load_dataset() call
 # best number might be different from num_proc above as it also depends on NW speed.
@@ -28,7 +29,7 @@ if __name__ == '__main__':
 
     # owt by default only contains the 'train' split, so create a test split
     split_dataset = dataset.train_test_split(
-        test_size=0.005,
+        test_size=0.0005,
         seed=2357,
         shuffle=True
     )
@@ -68,7 +69,7 @@ if __name__ == '__main__':
     # concatenate all the ids in each dataset into one large file we can use for training
     main_path = "/lustre/fswork/projects/rech/fku/uir17ua/data"
     for split, dset in tokenized.items():
-        if split == "val":
+        if split == "val" or save_train_and_val:
             for mul in multipliers:
                 total_batches = 1024 * mul
                 print(f"Preparing split {split} for size {total_batches}...\n")
