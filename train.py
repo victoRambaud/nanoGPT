@@ -313,7 +313,8 @@ if __name__ == "__main__":
         model.eval()
         split_size_dict = {
             "train": (1,),
-            "val": (1, 2, 4, 8, 16),
+            # "val": (1, 2, 4, 8, 16),
+            "val": (1, 2),
         }
         for split, block_muls in split_size_dict.items():
             for m in block_muls:
