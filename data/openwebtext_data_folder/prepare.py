@@ -28,7 +28,7 @@ if __name__ == '__main__':
 
     # owt by default only contains the 'train' split, so create a test split
     split_dataset = dataset.train_test_split(
-        test_size=0.0005,
+        test_size=0.005,
         seed=2357,
         shuffle=True
     )
@@ -64,7 +64,7 @@ if __name__ == '__main__':
         num_proc=num_proc,
     )
     total_batches = 4096
-    multipliers = [2, 4, 8, 16]
+    multipliers = [2, 4, 8, 16, 32]
     # concatenate all the ids in each dataset into one large file we can use for training
     main_path = "/lustre/fswork/projects/rech/fku/uir17ua/data"
     for split, dset in tokenized.items():
