@@ -20,8 +20,8 @@
 
 #SBATCH --hint=nomultithread
 
-## SBATCH --qos=qos_gpu_h100-t4
-#SBATCH --time=20:00:00
+#SBATCH --qos=qos_gpu_h100-t4
+#SBATCH --time=100:00:00
 #SBATCH --output=logs/gpu_job%j.out
 #SBATCH --error=errors/gpu_job%j.out
 
