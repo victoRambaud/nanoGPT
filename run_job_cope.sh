@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --output=TravailGPU%j.out # fichier de sortie (%j = job ID)
 #SBATCH --error=TravailGPU%j.err # fichier d’erreur (%j = job ID)
-#SBATCH --job-name=COPE
+#SBATCH --job-name=CoPE
 #SBATCH --account=fku@h100
 ##SBATCH -A fku@cpu
 
@@ -20,8 +20,8 @@
 
 #SBATCH --hint=nomultithread
 
-#SBATCH --qos=qos_gpu_h100-t4
-#SBATCH --time=100:00:00
+##SBATCH --qos=qos_gpu_h100-t4
+#SBATCH --time=20:00:00
 #SBATCH --output=logs/gpu_job%j.out
 #SBATCH --error=errors/gpu_job%j.out
 
