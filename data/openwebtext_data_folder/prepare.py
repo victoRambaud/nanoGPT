@@ -71,6 +71,7 @@ if __name__ == '__main__':
         if split == "val":
             for mul in multipliers:
                 total_batches = 1024 * mul
+                print(f"Preparing split {split} for size {total_batches}...\n")
                 arr_len = np.sum(dset['len'], dtype=np.uint64)
 
                 filename = os.path.join(os.path.dirname(__file__), f'{split}_{total_batches}.bin')
