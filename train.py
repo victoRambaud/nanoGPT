@@ -40,12 +40,14 @@ if __name__ == "__main__":
     # default config values designed to train a gpt2 (124M) on OpenWebText
     # I/O
     out_dir = "out"
+    wandb_run_name = "WM_L12_n768_base1024_rank32_ls0.0id_61"
+    ckpt_name = "checkpoint-72000"
     eval_interval = 2000
     log_interval = 1
     eval_iters = 200
     eval_only = False  # if True, script exits right after the first eval
     always_save_checkpoint = True  # if True, always save a checkpoint after each eval
-    init_from = "scratch"  # 'scratch' or 'resume' or 'gpt2*'
+    init_from = "resume"  # 'scratch' or 'resume' or 'gpt2*'
 
     # wandb logging
     wandb_log = True  # disabled by default
@@ -74,16 +76,17 @@ if __name__ == "__main__":
     block_layer_scaling_ratio: float = 0.
 
     # run name
-    if working_memory:
-        wandb_run_name = f"WM_L{n_layer}_n{n_embd}_base{base_freq}_rank{dt_rank}_ls{block_layer_scaling_ratio}"
-    elif cope:
-        wandb_run_name = f"COPE_L{n_layer}_n{n_embd}"
-    else:
-        rope = True
-        wandb_run_name = f"ROPE_L{n_layer}_n{n_embd}"
+    if init_from == "scratch":
+        if working_memory:
+            wandb_run_name = f"WM_L{n_layer}_n{n_embd}_base{base_freq}_rank{dt_rank}_ls{block_layer_scaling_ratio}"
+        elif cope:
+            wandb_run_name = f"COPE_L{n_layer}_n{n_embd}"
+        else:
+            rope = True
+            wandb_run_name = f"ROPE_L{n_layer}_n{n_embd}"
 
     # adamw optimizer
-    learning_rate = 6e-4 # max learning rate
+    learning_rate = 5e-4 # max learning rate
     max_iters = 600000 # total number of training iterations
     weight_decay = 1e-1
     beta1 = 0.9
@@ -91,9 +94,9 @@ if __name__ == "__main__":
     grad_clip = 1.0 # clip gradients at this value, or disable if == 0.0
     # learning rate decay settings
     decay_lr = True # whether to decay the learning rate
-    warmup_iters = 2000 # how many steps to warm up for
+    warmup_iters = 4000 # how many steps to warm up for
     lr_decay_iters = 600000 # should be ~= max_iters per Chinchilla
-    min_lr = 6e-5 # minimum learning rate, should be ~= learning_rate/10 per Chinchilla
+    min_lr = 0.00001 # minimum learning rate, should be ~= learning_rate/10 per Chinchilla
 
     # DDP settings
     backend = "nccl"  # 'nccl', 'gloo', etc.
@@ -241,7 +244,7 @@ if __name__ == "__main__":
     elif init_from == "resume":
         print(f"Resuming training from {out_dir}")
         # resume training from a checkpoint.
-        ckpt_path = os.path.join(out_dir, "ckpt.pt")
+        ckpt_path = os.path.join(out_dir, wandb_run_name, ckpt_name, "ckpt.pt")
         checkpoint = torch.load(ckpt_path, map_location=device)
         checkpoint_model_args = checkpoint["model_args"]
         # force these config attributes to be equal otherwise we can't even resume training
