@@ -254,6 +254,7 @@ if __name__ == "__main__":
         # for k in ["n_layer", "n_head", "n_embd", "block_size", "bias", "vocab_size"]:
         #     model_args[k] = checkpoint_model_args[k]
         # create the model
+        model_args["vocab_size"] = meta_vocab_size if meta_vocab_size is not None else 50304
         gptconf = TransformerConfig(**model_args)
         model = GPT(gptconf)
         state_dict = checkpoint["model"]
