@@ -40,15 +40,15 @@ if __name__ == "__main__":
     # default config values designed to train a gpt2 (124M) on OpenWebText
     # I/O
     out_dir = "out"
-    wandb_run_name = "ROPE_L12_n768id_945"
+    wandb_run_name = ""
     ckpt_name = ""
-    ckpt_path = "/lustre/fswork/projects/rech/fku/uir17ua/dev/nanoGPT/out/ROPE_L12_n768id_945/checkpoint-68000/ckpt.pt"
+    ckpt_path = ""
     eval_interval = 2000
     log_interval = 1
     eval_iters = 200
     eval_only = False  # if True, script exits right after the first eval
     always_save_checkpoint = True  # if True, always save a checkpoint after each eval
-    init_from = "resume"  # 'scratch' or 'resume' or 'gpt2*'
+    init_from = "scratch"  # 'scratch' or 'resume' or 'gpt2*'
 
     # wandb logging
     wandb_log = True  # disabled by default
@@ -67,9 +67,9 @@ if __name__ == "__main__":
     n_embd = 768
     dropout = 0.0  # for pretraining 0 is good, for finetuning try 0.1+
     bias = False  # do we use bias inside LayerNorm and Linear layers?
-    rope: bool = True
+    rope: bool = False
     cope: bool = False
-    working_memory: bool = False
+    working_memory: bool = True
     n_approx_steps: int = -1
     dt_rank: int = 32
     base_freq = block_size
