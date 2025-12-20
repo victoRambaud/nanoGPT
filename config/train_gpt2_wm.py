@@ -3,15 +3,15 @@
 # $ torchrun --standalone --nproc_per_node=8 train.py config/train_gpt2.py
 
 out_dir = "out"
-wandb_run_name = "WM_L12_n768_base1024_rank128_ls0.0id_604"
-ckpt_path = "/lustre/fswork/projects/rech/fku/uir17ua/dev/nanoGPT/out/WM_L12_n768_base1024_rank128_ls0.0id_604/checkpoint-80000/ckpt.pt"
-ckpt_name = "checkpoint-80000"
+wandb_run_name = ""
+ckpt_path = ""
+ckpt_name = ""
 eval_interval = 2000
 log_interval = 1
 eval_iters = 200
 eval_only = False  # if True, script exits right after the first eval
 always_save_checkpoint = True  # if True, always save a checkpoint after each eval
-init_from = "resume"  # 'scratch' or 'resume' or 'gpt2*'
+init_from = "scratch"  # 'scratch' or 'resume' or 'gpt2*'
 
 # wandb logging
 wandb_log = True  # disabled by default
@@ -34,7 +34,7 @@ rope: bool = False
 cope: bool = False
 working_memory: bool = True
 n_approx_steps: int = -1
-dt_rank: int = 128
+dt_rank: int = 16
 base_freq = block_size
 block_max_init: float = 1.0
 block_layer_scaling_ratio: float = 0.
