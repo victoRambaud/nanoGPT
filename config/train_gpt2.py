@@ -3,9 +3,9 @@
 # $ torchrun --standalone --nproc_per_node=8 train.py config/train_gpt2.py
 
 out_dir = "out"
-wandb_run_name = "/lustre/fswork/projects/rech/fku/uir17ua/dev/nanoGPT/out/ROPE_L12_n768id_468/checkpoint-90000/ckpt.pt"
+wandb_run_name = "ROPE_L12_n768id_468"
 ckpt_name = "checkpoint-90000"
-ckpt_path = ""
+ckpt_path = "/lustre/fswork/projects/rech/fku/uir17ua/dev/nanoGPT/out/ROPE_L12_n768id_468/checkpoint-90000/ckpt.pt"
 eval_interval = 2000
 log_interval = 1
 eval_iters = 200
