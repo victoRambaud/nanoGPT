@@ -4,7 +4,7 @@
 
 out_dir = "out"
 wandb_run_name = "WM_L12_n768_base1024_rank16_ls0.0id_134"
-ckpt_path = "/lustre/fswork/projects/rech/fku/uir17ua/dev/nanoGPT/out/WM_L12_n768_base1024_rank16_ls0.0id_134/checkpoint-98000"
+ckpt_path = "/lustre/fswork/projects/rech/fku/uir17ua/dev/nanoGPT/out/WM_L12_n768_base1024_rank16_ls0.0id_134/checkpoint-98000/ckpt.pt"
 ckpt_name = "checkpoint-98000"
 eval_interval = 2000
 log_interval = 1
