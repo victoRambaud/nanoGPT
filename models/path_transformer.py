@@ -69,7 +69,7 @@ class PathCausalSelfAttention(nn.Module):
             ),
         )
 
-    def forward(self, x: torch.Tensor, g: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, g: torch.Tensor, temperature: Optional[float] = None) -> torch.Tensor:
         B, L, D = (
             x.size()
         )  # batch size, sequence length, embedding dimensionality (n_embd)
