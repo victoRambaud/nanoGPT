@@ -338,4 +338,4 @@ class EMTransformer(nn.Module):
         for block in self.blocks:
             x, out_dict = block(x, g)
 
-        return x, out_dict
+        return self.out_norm(x), out_dict
