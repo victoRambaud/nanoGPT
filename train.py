@@ -90,7 +90,7 @@ if __name__ == "__main__":
             transformer_type = "EM"
         elif em_wm:
             wandb_run_name = f"EMWM_L{n_layer}_n{n_embd}_base{base_freq}_rank{dt_rank}_ls{block_layer_scaling_ratio}"
-            transformer_type = "EMWM"
+            transformer_type = "nEMWM"
         elif n_working_memory:
             wandb_run_name = f"nWM_L{n_layer}_n{n_embd}_base{base_freq}_rank{dt_rank}_ls{block_layer_scaling_ratio}"
             transformer_type = "nWM"
