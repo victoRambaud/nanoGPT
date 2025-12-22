@@ -72,6 +72,7 @@ if __name__ == "__main__":
     working_memory: bool = True
     episodic_memory: bool = False
     n_episodic_memory: bool = False
+    n_working_memory: bool = False
     em_wm: bool = False
     n_approx_steps: int = -1
     dt_rank: int = 8
@@ -90,6 +91,9 @@ if __name__ == "__main__":
         elif em_wm:
             wandb_run_name = f"EMWM_L{n_layer}_n{n_embd}_base{base_freq}_rank{dt_rank}_ls{block_layer_scaling_ratio}"
             transformer_type = "EMWM"
+        elif n_working_memory:
+            wandb_run_name = f"nWM_L{n_layer}_n{n_embd}_base{base_freq}_rank{dt_rank}_ls{block_layer_scaling_ratio}"
+            transformer_type = "nWM"
         elif n_episodic_memory:
             wandb_run_name = f"nEM_L{n_layer}_n{n_embd}_base{base_freq}_rank{dt_rank}_ls{block_layer_scaling_ratio}"
             transformer_type = "nEM"
