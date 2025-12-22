@@ -36,7 +36,7 @@ class PathTransformerConfig(TransformerConfig):
 
 
 class PathCausalSelfAttention(nn.Module):
-    def __init__(self, config: TransformerConfig):
+    def __init__(self, config: TransformerConfig, **kwargs):
         super().__init__()
         self.config = config
 
