@@ -58,21 +58,6 @@ class PathCausalSelfAttention(nn.Module):
 
         self.merge = config.merge
 
-        if config.exponential_gating:
-            self.delta_embedd = nn.Sequential(
-                nn.Linear(config.n_embd, config.dt_rank),
-                nn.Linear(config.dt_rank, config.n_head),
-            )
-            dt_init_std = config.dt_rank**-0.5 * config.dt_scale
-            if config.dt_init == "constant":
-                nn.init.constant_(self.delta_embedd[-1].weight, dt_init_std)
-            elif config.dt_init == "random":
-                nn.init.uniform_(
-                    self.delta_embedd[-1].weight, -dt_init_std, dt_init_std
-                )
-            else:
-                raise NotImplementedError
-
         # flash attention make GPU go brrrrr but support is only in PyTorch >= 2.0
         self.flash = (
             hasattr(torch.nn.functional, "scaled_dot_product_attention")
