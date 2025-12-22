@@ -4,6 +4,7 @@ import torch
 import torch.nn as nn
 
 from typing import Optional, Tuple
+from rotary_embedding_torch import RotaryEmbedding
 
 from models.transformer_utils import TransformerConfig, RotationModule
 
@@ -22,7 +23,10 @@ class nWMBlock(nn.Module):
         self.n_head = config.n_head
         self.temperature = config.temperature
 
-        self.rotation_module = RotationModule(config=config)
+        self.rotation_module = RotationModule(config=config) if config.working_memory else None
+        self.rotary_emb = (
+            RotaryEmbedding(dim=config.head_dim // 2, theta=config.rope_theta) if config.rope else None
+        )
 
         self.qkv_proj = nn.Linear(config.n_embd, 3 * config.n_embd, bias=config.bias)
         self.att_c_proj = nn.Linear(config.n_embd, config.n_embd, bias=config.bias)
@@ -86,11 +90,16 @@ class nWMBlock(nn.Module):
         q = q.view(B, L, self.n_head, D // self.n_head)
         v = v.view(B, L, self.n_head, D // self.n_head)
 
-        q, k, theta, th, (tt, ttt), rot_dict = self.rotate_qk(x, q, k)
+        if self.rotation_module is not None:
+            q, k, theta, th, (tt, ttt), rot_dict = self.rotate_qk(x, q, k)
 
         k = k.transpose(1, 2)  # (B, nh, T, hs)
         q = q.transpose(1, 2)  # (B, nh, T, hs)
         v = v.transpose(1, 2)  # (B, nh, T, hs)
+
+        if self.rotary_emb is not None:
+            q = self.rotary_emb.rotate_queries_or_keys(q)
+            k = self.rotary_emb.rotate_queries_or_keys(k)
 
         sqk = (self.sqk * (self.sqk_init_value / self.sqk_init_scaling)).view(
             1, self.config.n_head, 1, self.config.n_embd // self.config.n_head
@@ -151,9 +160,9 @@ class nWMBlock(nn.Module):
         x = just_norm(res)
 
         out_dict = dict()
-        out_dict["theta"] = th
-        for ke, va in rot_dict.items():
-            out_dict[ke] = va
+        # out_dict["theta"] = th
+        # for ke, va in rot_dict.items():
+        #     out_dict[ke] = va
         return x, out_dict
 
 

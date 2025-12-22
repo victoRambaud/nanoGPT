@@ -82,7 +82,7 @@ if __name__ == "__main__":
 
     # run name
     if init_from == "scratch":
-        if working_memory:
+        if working_memory and not n_working_memory:
             wandb_run_name = f"WM_L{n_layer}_n{n_embd}_base{base_freq}_rank{dt_rank}_ls{block_layer_scaling_ratio}"
             transformer_type = "WM"
         elif episodic_memory:
@@ -91,8 +91,11 @@ if __name__ == "__main__":
         elif em_wm:
             wandb_run_name = f"EMWM_L{n_layer}_n{n_embd}_base{base_freq}_rank{dt_rank}_ls{block_layer_scaling_ratio}"
             transformer_type = "nEMWM"
-        elif n_working_memory:
+        elif n_working_memory and not rope:
             wandb_run_name = f"nWM_L{n_layer}_n{n_embd}_base{base_freq}_rank{dt_rank}_ls{block_layer_scaling_ratio}"
+            transformer_type = "nWM"
+        elif n_working_memory and rope:
+            wandb_run_name = f"nROPE_L{n_layer}_n{n_embd}_base{base_freq}_rank{dt_rank}_ls{block_layer_scaling_ratio}"
             transformer_type = "nWM"
         elif n_episodic_memory:
             wandb_run_name = f"nEM_L{n_layer}_n{n_embd}_base{base_freq}_rank{dt_rank}_ls{block_layer_scaling_ratio}"
