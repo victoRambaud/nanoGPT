@@ -71,6 +71,7 @@ if __name__ == "__main__":
     cope: bool = False
     working_memory: bool = True
     episodic_memory: bool = False
+    n_episodic_memory: bool = False
     n_approx_steps: int = -1
     dt_rank: int = 8
     base_freq = block_size
@@ -82,7 +83,9 @@ if __name__ == "__main__":
         if working_memory:
             wandb_run_name = f"WM_L{n_layer}_n{n_embd}_base{base_freq}_rank{dt_rank}_ls{block_layer_scaling_ratio}"
         elif episodic_memory:
-            wandb_run_name = f"WM_L{n_layer}_n{n_embd}_base{base_freq}_rank{dt_rank}_ls{block_layer_scaling_ratio}"
+            wandb_run_name = f"EM_L{n_layer}_n{n_embd}_base{base_freq}_rank{dt_rank}_ls{block_layer_scaling_ratio}"
+        elif n_episodic_memory:
+            wandb_run_name = f"nEM_L{n_layer}_n{n_embd}_base{base_freq}_rank{dt_rank}_ls{block_layer_scaling_ratio}"
         elif cope:
             wandb_run_name = f"COPE_L{n_layer}_n{n_embd}"
         else:
