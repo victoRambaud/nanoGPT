@@ -333,7 +333,7 @@ class EMTransformer(nn.Module):
         elif isinstance(module, nn.Embedding):
             torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
 
-    def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor]:
+    def forward(self, x: torch.Tensor, temperature: Optional[float]=None) -> Tuple[torch.Tensor]:
         g = None
         for block in self.blocks:
             x, out_dict = block(x, g)
