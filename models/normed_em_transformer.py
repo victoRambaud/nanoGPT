@@ -200,7 +200,7 @@ class nPathBlock(nn.Module):
         #         else attn_weight_x * attn_weight_g
         #     )  # (b, n_h, l, h, h)
         # else:
-        attn_weight = attn_weight_x + attn_weight_g
+        attn_weight = attn_weight_x * attn_weight_g
 
         attn_weight += attn_bias
         attn_weight = torch.softmax(attn_weight / self.temperature, dim=-1)

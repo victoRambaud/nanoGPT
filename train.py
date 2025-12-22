@@ -318,7 +318,7 @@ if __name__ == "__main__":
         model=model,
         device=device,
         max_seq_len=block_size,
-        n_datasets=7
+        n_datasets=4
     )
     # helps estimate an arbitrarily accurate loss over either split using many batches
     @torch.no_grad()
@@ -379,12 +379,12 @@ if __name__ == "__main__":
     running_mfu = -1.0
     while True:
 
-        # if iter_num % eval_interval == 0 and master_process:
-        #     blimp_results = blimp_evaluator.evaluate_blimp_all()
-        #     if wandb_log:
-        #         wandb.log(
-        #             {"iter": iter_num, **blimp_results}
-        #         )
+        if iter_num % eval_interval == 0 and master_process:
+            blimp_results = blimp_evaluator.evaluate_blimp_all()
+            if wandb_log:
+                wandb.log(
+                    {"iter": iter_num, **blimp_results}
+                )
 
         # determine and set the learning rate for this iteration
         lr = get_lr(iter_num) if decay_lr else learning_rate
