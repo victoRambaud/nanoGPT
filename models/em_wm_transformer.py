@@ -6,6 +6,7 @@ from typing import Optional, Tuple, Any
 from models.transformer_utils import TransformerConfig, Block, LayerNorm
 from models.transformer import CausalSelfAttention
 from models.normed_em_transformer import nEMBlock
+from models.normed_wm_transformer import nWMBlock
 
 
 class EMWMTransformer(nn.Module):
@@ -15,16 +16,7 @@ class EMWMTransformer(nn.Module):
 
         self.blocks = nn.ModuleList(
             [
-                (
-                    nEMBlock(config)
-                    if (l > 0 and l % 4 == 0)
-                    else Block(
-                        config=config,
-                        attention_module=CausalSelfAttention,
-                        cope_module=None,
-                        layer_index=(config.n_layer - 1 - l),
-                    )
-                )
+                (nEMBlock(config) if (l > 4 or l == 8) else nWMBlock(config))
                 for l in range(config.n_layer)
             ]
         )

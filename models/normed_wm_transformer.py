@@ -87,7 +87,6 @@ class nWMBlock(nn.Module):
         v = v.view(B, L, self.n_head, D // self.n_head)
 
         q, k, theta, th, (tt, ttt), rot_dict = self.rotate_qk(x, q, k)
-        
 
         k = k.transpose(1, 2)  # (B, nh, T, hs)
         q = q.transpose(1, 2)  # (B, nh, T, hs)
