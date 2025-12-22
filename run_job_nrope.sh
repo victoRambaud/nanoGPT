@@ -39,5 +39,5 @@ export PYTHONPATH=/lustre/fswork/projects/rech/fku/uir17ua/python_libs:$PYTHONPA
 # set -x
 
 # srun --ntasks=4 python -u train.py config/train_gpt2.py
-torchrun --standalone --nproc_per_node=4 train.py config/train_gpt2_nwm.py
+torchrun --standalone --nproc_per_node=4 train.py config/train_gpt2_nrope.py
 # sbatch job.sh
