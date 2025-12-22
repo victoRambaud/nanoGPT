@@ -72,6 +72,7 @@ if __name__ == "__main__":
     working_memory: bool = True
     episodic_memory: bool = False
     n_episodic_memory: bool = False
+    em_wm: bool = False
     n_approx_steps: int = -1
     dt_rank: int = 8
     base_freq = block_size
@@ -82,15 +83,23 @@ if __name__ == "__main__":
     if init_from == "scratch":
         if working_memory:
             wandb_run_name = f"WM_L{n_layer}_n{n_embd}_base{base_freq}_rank{dt_rank}_ls{block_layer_scaling_ratio}"
+            transformer_type = "WM"
         elif episodic_memory:
             wandb_run_name = f"EM_L{n_layer}_n{n_embd}_base{base_freq}_rank{dt_rank}_ls{block_layer_scaling_ratio}"
+            transformer_type = "EM"
+        elif em_wm:
+            wandb_run_name = f"EMWM_L{n_layer}_n{n_embd}_base{base_freq}_rank{dt_rank}_ls{block_layer_scaling_ratio}"
+            transformer_type = "EMWM"
         elif n_episodic_memory:
             wandb_run_name = f"nEM_L{n_layer}_n{n_embd}_base{base_freq}_rank{dt_rank}_ls{block_layer_scaling_ratio}"
+            transformer_type = "nEM"
         elif cope:
             wandb_run_name = f"COPE_L{n_layer}_n{n_embd}"
+            transformer_type = "WM"
         else:
             rope = True
             wandb_run_name = f"ROPE_L{n_layer}_n{n_embd}"
+            transformer_type = "WM"
 
     # adamw optimizer
     learning_rate = 6e-4 # max learning rate
@@ -216,9 +225,7 @@ if __name__ == "__main__":
             meta = pickle.load(f)
         meta_vocab_size = meta["vocab_size"]
         print(f"found vocab_size = {meta_vocab_size} (inside {meta_path})")
-
-    # model init
-    transformer_type = "EM" if episodic_memory else "WM"
+    
     model_args = dict(
         transformer_type=transformer_type,
         n_layer=n_layer,

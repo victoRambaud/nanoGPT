@@ -102,7 +102,7 @@ class PathIntegrationModule(nn.Module):
         return q.view(b, l, -1), k.view(b, l, -1), theta, th, rot_dict
 
 
-class nPathBlock(nn.Module):
+class nEMBlock(nn.Module):
 
     def __init__(self, config: TransformerConfig):
         super().__init__()
@@ -253,7 +253,7 @@ class nEMTransformer(nn.Module):
     def __init__(self, config: TransformerConfig):
         super().__init__()
         self.config = config
-        self.blocks = nn.ModuleList([nPathBlock(config) for _ in range(config.n_layer)])
+        self.blocks = nn.ModuleList([nEMBlock(config) for _ in range(config.n_layer)])
 
     def forward(self, x: torch.Tensor, temperature: Optional[float] = None):
         for block in self.blocks:

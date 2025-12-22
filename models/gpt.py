@@ -11,6 +11,7 @@ from models.transformer_utils import LayerNorm, TransformerConfig
 from models.transformer import Transformer
 from models.path_transformer import EMTransformer
 from models.normed_em_transformer import nEMTransformer
+from models.em_wm_transformer import EMWMTransformer
 
 
 class GPT(nn.Module):
@@ -28,6 +29,8 @@ class GPT(nn.Module):
             self.transformer = Transformer(config)
         elif config.transformer_type == "nEM":
             self.transformer = nEMTransformer(config)
+        elif config.transformer_type == "EMWM":
+            self.transformer = EMWMTransformer(config)
         elif config.transformer_type == "EM":
             self.transformer = EMTransformer(config)
         else:
