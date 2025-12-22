@@ -74,7 +74,7 @@ class TransformerConfig:
     diag_block_size: int = 2  # for velocity intrinsic dimension
     merge: str = "mul"
     working_memory: bool = False  # if we learn RoPE like rotations on keys and queries
-    sensory_attention: bool = False
+    sensory_attention: bool = True
 
     dt_rank: Optional[int] = None
     block_max_init: float = 1.0
