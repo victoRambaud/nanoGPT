@@ -70,8 +70,9 @@ if __name__ == "__main__":
     rope: bool = False
     cope: bool = False
     working_memory: bool = True
+    episodic_memory: bool = False
     n_approx_steps: int = -1
-    dt_rank: int = 128
+    dt_rank: int = 8
     base_freq = block_size
     block_max_init: float = 1.0
     block_layer_scaling_ratio: float = 0.
@@ -79,6 +80,8 @@ if __name__ == "__main__":
     # run name
     if init_from == "scratch":
         if working_memory:
+            wandb_run_name = f"WM_L{n_layer}_n{n_embd}_base{base_freq}_rank{dt_rank}_ls{block_layer_scaling_ratio}"
+        elif episodic_memory:
             wandb_run_name = f"WM_L{n_layer}_n{n_embd}_base{base_freq}_rank{dt_rank}_ls{block_layer_scaling_ratio}"
         elif cope:
             wandb_run_name = f"COPE_L{n_layer}_n{n_embd}"
@@ -212,7 +215,9 @@ if __name__ == "__main__":
         print(f"found vocab_size = {meta_vocab_size} (inside {meta_path})")
 
     # model init
+    transformer_type = "EM" if episodic_memory else "WM"
     model_args = dict(
+        transformer_type=transformer_type,
         n_layer=n_layer,
         head_dim=head_dim,
         n_embd=n_embd,

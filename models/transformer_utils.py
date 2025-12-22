@@ -27,6 +27,7 @@ class DyT(nn.Module):
 
 @dataclass
 class TransformerConfig:
+    transformer_type: str = "WM"    # WM or EM
     use_padding: bool = False
     attention_type: str = "normal"  # "normal" or "ssm"
     base_scale_ngpt: float = 1.0 / (1024.0 ** 0.5)
@@ -583,7 +584,7 @@ class RotationModule(nn.Module):
         }
     
     def rotate_qk(
-        self, rot_matrix: torch.Tensor, q: torch.Tensor, k: torch.Tensor
+        self, rot_matrix: torch.Tensor, q: torch.Tensor, k: Optional[torch.Tensor] = None
         # self, theta: torch.Tensor, q: torch.Tensor, k: torch.Tensor
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """Rotate queries and keys by an angle of theta, using exponential of matrix S
@@ -598,7 +599,8 @@ class RotationModule(nn.Module):
         """
         b, l, nh, _ = q.shape
         q = q.view(b, l, nh, self.config.n_diag_blocks, self.config.diag_block_size)
-        k = k.view(b, l, nh, self.config.n_diag_blocks, self.config.diag_block_size)
+        if k is not None:
+            k = k.view(b, l, nh, self.config.n_diag_blocks, self.config.diag_block_size)
 
         if self.config.n_approx_steps == -1:
             cos = rot_matrix[0].unsqueeze(-1)
@@ -613,10 +615,12 @@ class RotationModule(nn.Module):
                 return x
             
             q = fast_rotate(q)
-            k = fast_rotate(k)
+            if k is not None:
+                k = fast_rotate(k)
         else:
             q = torch.einsum("blhnij,blhnj->blhni", rot_matrix, q).view(b, l, nh, -1)
-            k = torch.einsum("blhnij,blhnj->blhni", rot_matrix, k).view(b, l, nh, -1)
+            if k is not None:
+                k = torch.einsum("blhnij,blhnj->blhni", rot_matrix, k).view(b, l, nh, -1)
 
         return q, k
 

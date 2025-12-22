@@ -9,6 +9,7 @@ from typing import Optional, Tuple
 
 from models.transformer_utils import LayerNorm, TransformerConfig
 from models.transformer import Transformer
+from models.path_transformer import EMTransformer
 
 
 class GPT(nn.Module):
@@ -21,7 +22,11 @@ class GPT(nn.Module):
 
         self.token_embedding = nn.Embedding(config.vocab_size, config.n_embd)
         self.drop = nn.Dropout(config.dropout)
-        self.transformer = Transformer(config)
+        self.transformer = (
+            Transformer(config)
+            if config.transformer_type == "WM"
+            else EMTransformer(config)
+        )
         self.ln_f = LayerNorm(config.n_embd, bias=config.bias)
         self.lm_head = nn.Linear(config.n_embd, config.vocab_size, bias=False)
         # with weight tying when using torch.compile() some warnings get generated:
