@@ -109,7 +109,7 @@ class nWMBlock(nn.Module):
 
         L, S = q.size(-2), k.size(-2)
 
-        scale_factor = 1 / math.sqrt(q.size(-1))
+        scale_factor = math.sqrt(q.size(-1))
         attn_weight = q @ k.transpose(-2, -1) * scale_factor
 
         temp_mask = torch.ones(
