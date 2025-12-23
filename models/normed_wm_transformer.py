@@ -23,7 +23,7 @@ class nWMBlock(nn.Module):
         self.n_head = config.n_head
         self.temperature = config.temperature
 
-        self.rotation_module = RotationModule(config=config) if config.working_memory else None
+        self.rotation_module = RotationModule(config=config) if not config.rope else None
         self.rotary_emb = (
             RotaryEmbedding(dim=config.head_dim // 2, theta=config.rope_theta) if config.rope else None
         )
@@ -110,18 +110,27 @@ class nWMBlock(nn.Module):
         L, S = q.size(-2), k.size(-2)
 
         scale_factor = math.sqrt(q.size(-1))
-        attn_weight = q @ k.transpose(-2, -1) * scale_factor
+        # attn_weight = q @ k.transpose(-2, -1) * scale_factor
 
-        temp_mask = torch.ones(
-            L, S, dtype=torch.bool, device=attn_weight.device
-        ).tril(diagonal=0)
-        attn_bias = torch.zeros_like(attn_weight)
-        attn_bias.masked_fill_(temp_mask.logical_not(), float("-inf"))
+        # temp_mask = torch.ones(
+        #     L, S, dtype=torch.bool, device=attn_weight.device
+        # ).tril(diagonal=0)
+        # attn_bias = torch.zeros_like(attn_weight)
+        # attn_bias.masked_fill_(temp_mask.logical_not(), float("-inf"))
 
-        attn_weight += attn_bias
-        attn_weight = torch.softmax(attn_weight / self.temperature, dim=-1)
+        # attn_weight += attn_bias
+        # attn_weight = torch.softmax(attn_weight / self.temperature, dim=-1)
 
-        y = attn_weight @ v
+        # y = attn_weight @ v
+        y = torch.nn.functional.scaled_dot_product_attention(
+            q,
+            k,
+            v,
+            attn_mask=None,
+            dropout_p=0,
+            is_causal=True,
+            scale=scale_factor
+        )
         y = y.transpose(1, 2).contiguous().view(B, L, D)
 
         ######################### END ATTENTION #########################
