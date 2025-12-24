@@ -23,9 +23,13 @@ class nWMBlock(nn.Module):
         self.n_head = config.n_head
         self.temperature = config.temperature
 
-        self.rotation_module = RotationModule(config=config) if not config.rope else None
+        self.rotation_module = (
+            RotationModule(config=config) if not config.rope else None
+        )
         self.rotary_emb = (
-            RotaryEmbedding(dim=config.head_dim // 2, theta=config.rope_theta) if config.rope else None
+            RotaryEmbedding(dim=config.head_dim // 2, theta=config.rope_theta)
+            if config.rope
+            else None
         )
 
         self.qkv_proj = nn.Linear(config.n_embd, 3 * config.n_embd, bias=config.bias)
@@ -58,7 +62,10 @@ class nWMBlock(nn.Module):
         )
 
     def rotate_qk(
-        self, x: torch.Tensor, q: torch.Tensor, k: torch.Tensor
+        self,
+        x: torch.Tensor,
+        q: torch.Tensor,
+        k: torch.Tensor,
         # self, theta: torch.Tensor, q: torch.Tensor, k: torch.Tensor
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """Rotate queries and keys by an angle of theta, using exponential of matrix S
@@ -109,7 +116,11 @@ class nWMBlock(nn.Module):
 
         L, S = q.size(-2), k.size(-2)
 
-        scale_factor = 1 / math.sqrt(q.size(-1))
+        scale_factor = (
+            1 / math.sqrt(q.size(-1))
+            if self.config.inv_scale_attn
+            else math.sqrt(q.size(-1))
+        )
         # attn_weight = q @ k.transpose(-2, -1) * scale_factor
 
         # temp_mask = torch.ones(
@@ -123,13 +134,7 @@ class nWMBlock(nn.Module):
 
         # y = attn_weight @ v
         y = torch.nn.functional.scaled_dot_product_attention(
-            q,
-            k,
-            v,
-            attn_mask=None,
-            dropout_p=0,
-            is_causal=True,
-            scale=scale_factor
+            q, k, v, attn_mask=None, dropout_p=0, is_causal=True, scale=scale_factor
         )
         y = y.transpose(1, 2).contiguous().view(B, L, D)
 
@@ -184,5 +189,5 @@ class nWMTransformer(nn.Module):
     def forward(self, x: torch.Tensor, temperature: Optional[float] = None):
         for block in self.blocks:
             x, out_dict = block(x)
-        
+
         return x, out_dict

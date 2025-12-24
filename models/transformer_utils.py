@@ -76,6 +76,7 @@ class TransformerConfig:
     working_memory: bool = False  # if we learn RoPE like rotations on keys and queries
     sensory_attention: bool = True
 
+    inv_scale_attn: bool = False
     dt_rank: Optional[int] = None
     block_max_init: float = 1.0
     block_layer_scaling_ratio: float = 0.    # 
