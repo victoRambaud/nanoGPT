@@ -237,6 +237,7 @@ if __name__ == "__main__":
         n_embd=n_embd,
         block_size=block_size,
         inv_scale_attn=inv_scale_attn,
+        em_qk_positions=em_qk_positions,
         bias=bias,
         vocab_size=None,
         dropout=dropout,
