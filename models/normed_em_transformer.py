@@ -30,8 +30,8 @@ class PathIntegrationModule(nn.Module):
         # )
         # self.init_g = nn.Parameter(init_g * config.g_scale)
         self.init_q = nn.Parameter(torch.randn(config.head_dim))
-        self.init_k = nn.Parameter(torch.randn(config.head_dim))
-        self.init_v = nn.Parameter(torch.randn(config.head_dim), requires_grad=False)
+        self.init_k = nn.Parameter(torch.randn(config.head_dim)) if config.em_qk_positions else None
+        # self.init_v = nn.Parameter(torch.randn(config.head_dim), requires_grad=False)
 
         self.sqk_init_value = 1.0
         self.sqk_init_scaling = config.base_scale_ngpt
@@ -51,11 +51,14 @@ class PathIntegrationModule(nn.Module):
             .view(1, 1, 1, -1)
             .repeat(b, l, self.config.n_head, 1)
         ) * sqk # b, l, nh, h
-        k = (
-            just_norm(self.init_k)
-            .view(1, 1, 1, -1)
-            .repeat(b, l, self.config.n_head, 1)
-        ) * sqk  # b, l, nh, h
+        if self.config.em_qk_positions:
+            k = (
+                just_norm(self.init_k)
+                .view(1, 1, 1, -1)
+                .repeat(b, l, self.config.n_head, 1)
+            ) * sqk  # b, l, nh, h
+        else:
+            k = q
         # v = (
         #     just_norm(self.init_v)
         #     .view(1, 1, 1, -1)
@@ -85,17 +88,6 @@ class PathIntegrationModule(nn.Module):
         k: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
         b, l = x.shape[:2]
-
-        # v should be of shape b, l, nh, dt_rank
-        # then, for each rotation matrix A_i, k_i of shape dt_rank, A*_i = exp(<v, k_i>A_i) = exp(v_i A_i)
-        # but this is exactly like doing v = G o L, L -> (b, l, nh, dt_rank), G -> (b, l, nh, nb)
-        # v_init = self.v_embedd(x).view(b, l, self.config.n_head, -1)  # b, l, nh, nb
-
-        # if g is None:
-        #     g = self.init_positions(x)
-        # else:
-        #     # v = v_init
-        #     g = g.view(b, l, self.config.n_head, -1)
         q, k = self.init_positions(x)
 
         q, k, theta, th, rot_dict = self.path_integration(x, q, k)

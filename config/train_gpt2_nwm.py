@@ -35,6 +35,7 @@ cope: bool = False
 working_memory: bool = False
 episodic_memory: bool = False
 n_episodic_memory: bool = False
+transformer_type: str = "nWM"
 n_working_memory: bool = True
 inv_scale_attn: bool = False
 em_wm: bool = False
@@ -45,29 +46,27 @@ block_max_init: float = 1.0
 block_layer_scaling_ratio: float = 0.
 
 # run name
-# if init_from == "scratch":
-    # if working_memory:
-    #     wandb_run_name = f"WM_L{n_layer}_n{n_embd}_base{base_freq}_rank{dt_rank}_ls{block_layer_scaling_ratio}"
-    #     transformer_type = "WM"
-    # elif episodic_memory:
-    #     wandb_run_name = f"EM_L{n_layer}_n{n_embd}_base{base_freq}_rank{dt_rank}_ls{block_layer_scaling_ratio}"
-    #     transformer_type = "EM"
-    # elif em_wm:
-    #     wandb_run_name = f"EMWM_L{n_layer}_n{n_embd}_base{base_freq}_rank{dt_rank}_ls{block_layer_scaling_ratio}"
-    #     transformer_type = "EMWM"
-    # elif n_episodic_memory:
-    #     wandb_run_name = f"nEM_L{n_layer}_n{n_embd}_base{base_freq}_rank{dt_rank}_ls{block_layer_scaling_ratio}"
-    #     transformer_type = "nEM"
-    # elif n_working_memory:
-    #     wandb_run_name = f"nWM_L{n_layer}_n{n_embd}_base{base_freq}_rank{dt_rank}_ls{block_layer_scaling_ratio}"
-    #     transformer_type = "nWM"
-    # elif cope:
-    #     wandb_run_name = f"COPE_L{n_layer}_n{n_embd}"
-    #     transformer_type = "WM"
-    # else:
-    #     rope = True
-    #     wandb_run_name = f"ROPE_L{n_layer}_n{n_embd}"
-    #     transformer_type = "WM"
+# run name
+if init_from == "scratch":
+    if transformer_type == "WM":
+        wandb_run_name = f"WM_L{n_layer}_n{n_embd}_base{base_freq}_rank{dt_rank}_ls{block_layer_scaling_ratio}"
+    elif transformer_type == "EM":
+        wandb_run_name = f"EM_L{n_layer}_n{n_embd}_base{base_freq}_rank{dt_rank}_ls{block_layer_scaling_ratio}"
+    elif transformer_type == "nEMWM":
+        wandb_run_name = f"nEMWM_invscale_{inv_scale_attn}_L{n_layer}_n{n_embd}_base{base_freq}_rank{dt_rank}_ls{block_layer_scaling_ratio}"
+    elif transformer_type == "nWM" and not rope:
+        wandb_run_name = f"nWM_invscale_{inv_scale_attn}_L{n_layer}_n{n_embd}_base{base_freq}_rank{dt_rank}_ls{block_layer_scaling_ratio}"
+    elif transformer_type == "nWM" and rope:
+        wandb_run_name = f"nROPE_invscale_{inv_scale_attn}_L{n_layer}_n{n_embd}_base{base_freq}_rank{dt_rank}_ls{block_layer_scaling_ratio}"
+    elif transformer_type == "nEM":
+        wandb_run_name = f"nEM_invscale_{inv_scale_attn}_L{n_layer}_n{n_embd}_base{base_freq}_rank{dt_rank}_ls{block_layer_scaling_ratio}"
+    elif cope:
+        wandb_run_name = f"COPE_L{n_layer}_n{n_embd}"
+        transformer_type = "WM"
+    else:
+        rope = True
+        wandb_run_name = f"ROPE_L{n_layer}_n{n_embd}"
+        transformer_type = "WM"
 
 # adamw optimizer
 learning_rate = 3e-4 # max learning rate

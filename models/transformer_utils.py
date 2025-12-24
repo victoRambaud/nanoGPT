@@ -77,6 +77,7 @@ class TransformerConfig:
     sensory_attention: bool = True
 
     inv_scale_attn: bool = False
+    em_qk_positions: bool = True
     dt_rank: Optional[int] = None
     block_max_init: float = 1.0
     block_layer_scaling_ratio: float = 0.    # 
