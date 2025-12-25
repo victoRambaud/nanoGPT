@@ -176,7 +176,7 @@ class nEMBlock(nn.Module):
         L, S = q_cat.size(-2), k_cat.size(-2)
 
         scale_factor = 1 / q.size(-1) if self.config.inv_scale_attn else q.size(-1)
-        attn_weight = q_cat @ k_cat.transpose(-2, -1) * scale_factor
+        attn_weight = q_cat @ k_cat.transpose(-2, -1)
         attn_weight_x, attn_weight_g = attn_weight.split(self.config.n_head, dim=1)
 
         temp_mask = torch.ones(
@@ -184,15 +184,8 @@ class nEMBlock(nn.Module):
         ).tril(diagonal=0)
         attn_bias = torch.zeros_like(attn_weight_x)
         attn_bias.masked_fill_(temp_mask.logical_not(), float("-inf"))
-
-        # if self.config.sensory_attention:
-        #     attn_weight = (
-        #         attn_weight_x + attn_weight_g
-        #         if self.config.merge == "add"
-        #         else attn_weight_x * attn_weight_g
-        #     )  # (b, n_h, l, h, h)
-        # else:
-        attn_weight = attn_weight_x * attn_weight_g
+        
+        attn_weight = attn_weight_x * attn_weight_g * scale_factor
 
         attn_weight += attn_bias
         attn_weight = torch.softmax(attn_weight / self.temperature, dim=-1)
