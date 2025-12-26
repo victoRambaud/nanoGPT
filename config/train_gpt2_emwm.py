@@ -35,7 +35,10 @@ cope: bool = False
 working_memory: bool = False
 episodic_memory: bool = False
 n_episodic_memory: bool = False
-em_wm: bool = True
+transformer_type: str = "EMWM"
+n_working_memory: bool = True
+inv_scale_attn: bool = False
+em_wm: bool = False
 n_approx_steps: int = -1
 dt_rank: int = 8
 base_freq = block_size
@@ -43,19 +46,20 @@ block_max_init: float = 1.0
 block_layer_scaling_ratio: float = 0.
 
 # run name
+# run name
 if init_from == "scratch":
-    if working_memory:
+    if transformer_type == "WM":
         wandb_run_name = f"WM_L{n_layer}_n{n_embd}_base{base_freq}_rank{dt_rank}_ls{block_layer_scaling_ratio}"
-        transformer_type = "WM"
-    elif episodic_memory:
+    elif transformer_type == "EM":
         wandb_run_name = f"EM_L{n_layer}_n{n_embd}_base{base_freq}_rank{dt_rank}_ls{block_layer_scaling_ratio}"
-        transformer_type = "EM"
-    elif em_wm:
-        wandb_run_name = f"EMWM_L{n_layer}_n{n_embd}_base{base_freq}_rank{dt_rank}_ls{block_layer_scaling_ratio}"
-        transformer_type = "EMWM"
-    elif n_episodic_memory:
-        wandb_run_name = f"nEM_L{n_layer}_n{n_embd}_base{base_freq}_rank{dt_rank}_ls{block_layer_scaling_ratio}"
-        transformer_type = "nEM"
+    elif transformer_type == "EMWM":
+        wandb_run_name = f"nEMWM_invscale_{inv_scale_attn}_L{n_layer}_n{n_embd}_base{base_freq}_rank{dt_rank}_ls{block_layer_scaling_ratio}"
+    elif transformer_type == "nWM" and not rope:
+        wandb_run_name = f"nWM_invscale_{inv_scale_attn}_L{n_layer}_n{n_embd}_base{base_freq}_rank{dt_rank}_ls{block_layer_scaling_ratio}"
+    elif transformer_type == "nWM" and rope:
+        wandb_run_name = f"nROPE_invscale_{inv_scale_attn}_L{n_layer}_n{n_embd}_base{base_freq}_rank{dt_rank}_ls{block_layer_scaling_ratio}"
+    elif transformer_type == "nEM":
+        wandb_run_name = f"nEM_invscale_{inv_scale_attn}_L{n_layer}_n{n_embd}_base{base_freq}_rank{dt_rank}_ls{block_layer_scaling_ratio}"
     elif cope:
         wandb_run_name = f"COPE_L{n_layer}_n{n_embd}"
         transformer_type = "WM"
@@ -65,7 +69,7 @@ if init_from == "scratch":
         transformer_type = "WM"
 
 # adamw optimizer
-learning_rate = 6e-4 # max learning rate
+learning_rate = 3e-4 # max learning rate
 max_iters = 600000 # total number of training iterations
 weight_decay = 1e-1
 beta1 = 0.9
@@ -73,6 +77,6 @@ beta2 = 0.95
 grad_clip = 1.0 # clip gradients at this value, or disable if == 0.0
 # learning rate decay settings
 decay_lr = True # whether to decay the learning rate
-warmup_iters = 2000 # how many steps to warm up for
+warmup_iters = 4000 # how many steps to warm up for
 lr_decay_iters = 600000 # should be ~= max_iters per Chinchilla
-min_lr = 6e-5 # minimum learning rate, should be ~= learning_rate/10 per Chinchilla
+min_lr = 1e-5 # minimum learning rate, should be ~= learning_rate/10 per Chinchilla

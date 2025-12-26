@@ -69,7 +69,7 @@ class PathCausalSelfAttention(nn.Module):
             ),
         )
 
-    def forward(self, x: torch.Tensor, g: torch.Tensor, temperature: Optional[float] = None) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, q_g: torch.Tensor, k_g: torch.Tensor, temperature: Optional[float] = None) -> torch.Tensor:
         B, L, D = (
             x.size()
         )  # batch size, sequence length, embedding dimensionality (n_embd)
@@ -87,8 +87,6 @@ class PathCausalSelfAttention(nn.Module):
         )  # (B, nh, T, hs)
 
         # q_g, k_g = self.qk_g(g).split(self.n_embd, dim=2)
-        q_g = g
-        k_g = g
         k_g = k_g.view(B, L, self.n_head, D // self.n_head).transpose(
             1, 2
         )  # (B, nh, T, hs)
@@ -102,11 +100,7 @@ class PathCausalSelfAttention(nn.Module):
         # causal self-attention; Self-attend: (B, nh, T, hs) x (B, nh, hs, T) -> (B, nh, T, T)
         L, S = q_cat.size(-2), k_cat.size(-2)
 
-        scale_factor = (
-            1 / math.sqrt(q.size(-1))
-            if not self.config.sensory_attention
-            else 1 / q.size(-1)
-        )
+        scale_factor = (1 / math.sqrt(q.size(-1)))
         attn_weight = q_cat @ k_cat.transpose(-2, -1) * scale_factor
         attn_weight_x, attn_weight_g = attn_weight.split(self.n_head, dim=1)
 
@@ -125,7 +119,7 @@ class PathCausalSelfAttention(nn.Module):
         else:
             attn_weight = 1e-6 * attn_weight_x + attn_weight_g
 
-            attn_weight += attn_bias
+        attn_weight += attn_bias
 
         log_norm = (
             torch.log(torch.tensor(L).float()) if self.config.softmax_log_norm else 1.0
@@ -136,21 +130,7 @@ class PathCausalSelfAttention(nn.Module):
             attn_weight / (log_norm * self.temperature),
             dim=-1,
         )
-        
-        # attn_weight = torch.softmax(attn_weight / self.temperature, dim=-1)
-        # with torch.no_grad():
-        #     attn_weight_g += attn_bias
-        #     attn_weight_g = torch.softmax(
-        #         # attn_weight / self.temperature,
-        #         attn_weight_g / (log_norm * self.temperature),
-        #         dim=-1,
-        #     )
-        #     attn_weight_x += attn_bias
-        #     attn_weight_x = torch.softmax(
-        #         # attn_weight / self.temperature,
-        #         attn_weight_x / (log_norm * self.temperature),
-        #         dim=-1,
-        #     )
+
         y = attn_weight @ v
 
         y = (
@@ -168,7 +148,7 @@ class PathCausalSelfAttention(nn.Module):
         out_dict["att_x_norm"] = attn_weight_x.abs().mean(dim=(-2, -1)).mean().item()
         out_dict["att_g_norm"] = attn_weight_g.abs().mean(dim=(-2, -1)).mean().item()
 
-        out_dict["g_norm"] = g.norm(dim=-1).mean().item()
+        # out_dict["g_norm"] = g.norm(dim=-1).mean().item()
         out_dict["q_norm"] = q.norm(dim=-1).mean().item()
         out_dict["k_norm"] = k.norm(dim=-1).mean().item()
 
@@ -176,11 +156,13 @@ class PathCausalSelfAttention(nn.Module):
 
 
 class PathIntegrationModule(nn.Module):
-    def __init__(self, config: TransformerConfig, layer_index: Optional[int] = None):
+    def __init__(self, config: TransformerConfig, layer_index: float = None):
         super().__init__()
         self.config = config
 
-        self.rotation_module = RotationModule(config, layer_index=layer_index)
+        self.rotation_module = (
+            RotationModule(config, layer_index=layer_index)
+        )
 
         # since we have a shared rotation matrix we need a shared init position
         # init_g = (
@@ -189,56 +171,50 @@ class PathIntegrationModule(nn.Module):
         #     else torch.randn(config.head_dim)
         # )
         # self.init_g = nn.Parameter(init_g * config.g_scale)
-        self.init_g = nn.Parameter(torch.randn(config.head_dim) * 0.25)
-        self.g_act_fn = nn.ReLU() if config.g_act_fn == "relu" else nn.Identity()
+        self.init_q = nn.Parameter(torch.randn(config.head_dim))
+        self.init_k = nn.Parameter(torch.randn(config.head_dim)) if config.em_qk_positions else None
+        # self.init_v = nn.Parameter(torch.randn(config.head_dim), requires_grad=False)
+
+        self.sqk_init_value = 1.0
+        self.sqk_init_scaling = config.base_scale_ngpt
+        self.sqk = nn.Parameter(self.sqk_init_scaling * torch.ones(self.config.n_embd))
+        # self.g_act_fn = nn.ReLU() if config.g_act_fn == "relu" else nn.Identity()
 
     def init_positions(self, x: torch.Tensor) -> Tuple[torch.Tensor]:
         # b, l, nh, nb = theta.shape
         b, l, _ = x.shape
-        # for init we start at initial position then do successive rotations
-        # cumsum allows to do this in parallel
+        q = self.init_q.view(1, 1, 1, -1).repeat(b, l, self.config.n_head, 1)
+        if self.config.em_qk_positions:
+            k = self.init_k.view(1, 1, 1, -1).repeat(b, l, self.config.n_head, 1)
+        else:
+            k = q
+            
+        return q, k
 
-        g = (
-            self.g_act_fn(self.init_g)
-            .view(1, 1, 1, -1)
-            .repeat(b, l, self.config.n_head, 1)
-        )  # b, l, nh, h
-        return g
-
-    def path_integration(self, x: torch.Tensor, g: torch.Tensor) -> torch.Tensor:
+    def path_integration(
+        self, x: torch.Tensor, q: torch.Tensor, k: torch.Tensor
+    ) -> Tuple[torch.Tensor]:
         # TODO if g is not None, we should do a full SSM step to integrate both g_t^l-1 and g_t-1^l
         # i.e. past step at current layer, or current step at previous layer
         # h_t^l = A_t h_t-1^l + B_t h_t^l-1
-        b, l, nh, _ = g.shape
+        b, l, nh, _ = q.shape
 
         thetaS, theta, th, rot_dict = self.rotation_module(x)
-        # g = g.view(b, l, nh, self.config.n_diag_blocks, self.config.diag_block_size)
-        # Path integration
-        # g = torch.einsum("blhnij,blhnj->blhni", thetaS, g).view(b, l, nh, -1)
-        g, _ = self.rotation_module.rotate_qk(thetaS, g)
-        return self.g_act_fn(g), theta, th, rot_dict
+        q, k = self.rotation_module.rotate_qk(thetaS, q, k)
+
+        return q, k, theta, th, rot_dict
 
     def forward(
         self,
         x: torch.Tensor,
-        g: Optional[torch.Tensor] = None,
+        q: Optional[torch.Tensor] = None,
+        k: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
         b, l = x.shape[:2]
+        q, k = self.init_positions(x)
 
-        # v should be of shape b, l, nh, dt_rank
-        # then, for each rotation matrix A_i, k_i of shape dt_rank, A*_i = exp(<v, k_i>A_i) = exp(v_i A_i)
-        # but this is exactly like doing v = G o L, L -> (b, l, nh, dt_rank), G -> (b, l, nh, nb)
-        # v_init = self.v_embedd(x).view(b, l, self.config.n_head, -1)  # b, l, nh, nb
-
-        # if g is None:
-        #     g = self.init_positions(x)
-        # else:
-        #     # v = v_init
-        #     g = g.view(b, l, self.config.n_head, -1)
-        g = self.init_positions(x)
-
-        g, theta, th, rot_dict = self.path_integration(x, g)
-        return g.view(b, l, -1), theta, th, rot_dict
+        q, k, theta, th, rot_dict = self.path_integration(x, q, k)
+        return q.view(b, l, -1), k.view(b, l, -1), theta, th, rot_dict
 
 
 class EMBlock(nn.Module):
@@ -266,21 +242,13 @@ class EMBlock(nn.Module):
         # TODO might need a norm layer should it need a specific attention ?
         # We could have it in the attention block since we already compute its attention
         # path integrate
-        g, theta, th, rot_dict = self.path_integration_module(x, g)
-        # g_pi, theta, th, rot_dict = self.path_integration_module(x, g)
-        # if g is not None:
-        #     g = g + g_pi
-        # else:
-        #     g = g_pi
+        g_q, g_k, theta, th, rot_dict = self.path_integration_module(x, g)
 
         # update x like in a normal transformer
-        x, out_dict = self.transformer_block(x, g)
+        x, out_dict = self.transformer_block(x, g_q, g_k)
         for k, v in rot_dict.items():
             out_dict[k] = v
-        # x = g_pi
-        # out_dict = dict()
-        if not self.training:
-            out_dict["g"] = g
+            
         out_dict["theta"] = th
         return x, out_dict
 

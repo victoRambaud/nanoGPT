@@ -16,7 +16,7 @@ class EMWMTransformer(nn.Module):
 
         self.blocks = nn.ModuleList(
             [
-                (nEMBlock(config) if (l > 4 or l == 8) else nWMBlock(config))
+                (nEMBlock(config) if (l == 4 or l == 8) else nWMBlock(config))
                 for l in range(config.n_layer)
             ]
         )
