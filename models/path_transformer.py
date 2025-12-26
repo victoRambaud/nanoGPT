@@ -175,11 +175,6 @@ class PathIntegrationModule(nn.Module):
         self.init_k = nn.Parameter(torch.randn(config.head_dim)) if config.em_qk_positions else None
         # self.init_v = nn.Parameter(torch.randn(config.head_dim), requires_grad=False)
 
-        self.sqk_init_value = 1.0
-        self.sqk_init_scaling = config.base_scale_ngpt
-        self.sqk = nn.Parameter(self.sqk_init_scaling * torch.ones(self.config.n_embd))
-        # self.g_act_fn = nn.ReLU() if config.g_act_fn == "relu" else nn.Identity()
-
     def init_positions(self, x: torch.Tensor) -> Tuple[torch.Tensor]:
         # b, l, nh, nb = theta.shape
         b, l, _ = x.shape
