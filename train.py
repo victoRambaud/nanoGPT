@@ -424,6 +424,7 @@ if __name__ == "__main__":
             print(
                 f"step {iter_num}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}"
             )
+            print(losses)
             if wandb_log:
                 wandb_dict = {
                     "iter": iter_num,
