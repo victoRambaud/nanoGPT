@@ -199,8 +199,10 @@ if __name__ == "__main__":
         if split == "train":
             data = np.memmap(os.path.join(data_dir, "train.bin"), dtype=np.uint16, mode="r")
         else:
-            data = np.memmap(os.path.join(data_dir, "val.bin"), dtype=np.uint16, mode="r")
-            # data = np.memmap(os.path.join("/lustre/fswork/projects/rech/fku/uir17ua/dev/nanoGPT/data/pg19", "train_100.bin"), dtype=np.uint16, mode="r")
+            if eval_mode == "pg19_normal":
+                data = np.memmap(os.path.join("/lustre/fswork/projects/rech/fku/uir17ua/dev/nanoGPT/data/pg19", "train_100.bin"), dtype=np.uint16, mode="r")
+            else:
+                data = np.memmap(os.path.join(data_dir, "val.bin"), dtype=np.uint16, mode="r")
         
         ix = torch.randint(len(data) - blk_sz, (btch_sz,))
         x = torch.stack(
@@ -312,6 +314,8 @@ if __name__ == "__main__":
         )
     model.to(device)
 
+    eval_mode = "normal"
+
     # initialize a GradScaler. If enabled=False scaler is a no-op
     scaler = torch.cuda.amp.GradScaler(enabled=(dtype == "float16"))
 
@@ -387,14 +391,14 @@ if __name__ == "__main__":
         coeff = 0.5 * (1.0 + math.cos(math.pi * decay_ratio))  # coeff ranges 0..1
         return min_lr + coeff * (learning_rate - min_lr)
 
-
+    
     # logging
     if wandb_log and master_process:
         import wandb
         if not eval_only:
             wandb_run_name = wandb_run_name + f"id_{random.randint(0, 1000)}" 
         else:
-            wandb_run_name = f"pg19_eval_{wandb_run_name}"
+            wandb_run_name = f"{eval_mode}_eval_{wandb_run_name}"
 
         print(f"####### WANDB RUN NAME {wandb_run_name} #######")
         wandb.init(
@@ -409,7 +413,7 @@ if __name__ == "__main__":
     running_mfu = -1.0
     while True:
 
-        if iter_num % eval_interval == 0 and master_process:
+        if iter_num % eval_interval == 0 and eval_mode == "pg19_new":
             pg19_ppl = eval_pg19(model=model, max_len=2048, batch_size=batch_size//2)
         #     blimp_results = blimp_evaluator.evaluate_blimp_all()
             if wandb_log:
