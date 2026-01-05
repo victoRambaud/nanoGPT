@@ -393,7 +393,7 @@ if __name__ == "__main__":
         if not eval_only:
             wandb_run_name = wandb_run_name + f"id_{random.randint(0, 1000)}" 
         else:
-            wandb_run_name = f"eval_{wandb_run_name}"
+            wandb_run_name = f"pg19_eval_{wandb_run_name}"
 
         print(f"####### WANDB RUN NAME {wandb_run_name} #######")
         wandb.init(
