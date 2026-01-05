@@ -41,7 +41,7 @@ inv_scale_attn: bool = False
 em_wm: bool = False
 n_approx_steps: int = -1
 dt_rank: int = 8
-base_freq = 10000
+base_freq = 64
 block_max_init: float = 1.0
 block_layer_scaling_ratio: float = 0.
 
