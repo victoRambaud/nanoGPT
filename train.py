@@ -32,6 +32,7 @@ from typing import Tuple, Dict, Optional
 from models.gpt import GPT
 from models.transformer_utils import TransformerConfig
 from evals.eval_blimp import BlimpEvaluator
+from evals.eval_pg19 import eval_pg19
 
 
 if __name__ == "__main__":
@@ -198,8 +199,8 @@ if __name__ == "__main__":
         if split == "train":
             data = np.memmap(os.path.join(data_dir, "train.bin"), dtype=np.uint16, mode="r")
         else:
-            # data = np.memmap(os.path.join(data_dir, "val.bin"), dtype=np.uint16, mode="r")
-            data = np.memmap(os.path.join("/lustre/fswork/projects/rech/fku/uir17ua/dev/nanoGPT/data/pg19", "train_100.bin"), dtype=np.uint16, mode="r")
+            data = np.memmap(os.path.join(data_dir, "val.bin"), dtype=np.uint16, mode="r")
+            # data = np.memmap(os.path.join("/lustre/fswork/projects/rech/fku/uir17ua/dev/nanoGPT/data/pg19", "train_100.bin"), dtype=np.uint16, mode="r")
         
         ix = torch.randint(len(data) - blk_sz, (btch_sz,))
         x = torch.stack(
@@ -408,12 +409,13 @@ if __name__ == "__main__":
     running_mfu = -1.0
     while True:
 
-        # if iter_num % eval_interval == 0 and master_process:
+        if iter_num % eval_interval == 0 and master_process:
+            pg19_ppl = eval_pg19(model=model, max_len=2048, batch_size=batch_size//2)
         #     blimp_results = blimp_evaluator.evaluate_blimp_all()
-        #     if wandb_log:
-        #         wandb.log(
-        #             {"iter": iter_num, **blimp_results}
-        #         )
+            if wandb_log:
+                wandb.log(
+                    {"iter": iter_num, "pg19_2048_ppl": pg19_ppl}
+                )
 
         # determine and set the learning rate for this iteration
         lr = get_lr(iter_num) if decay_lr else learning_rate
