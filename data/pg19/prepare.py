@@ -24,7 +24,7 @@ enc = tiktoken.get_encoding("gpt2")
 
 if __name__ == '__main__':
     # takes 54GB in huggingface .cache dir, about 8M documents (8,013,769)
-    dataset = load_dataset("emozilla/pg19", split="train", num_proc=num_proc_load_dataset)
+    dataset = load_dataset("emozilla/pg19", split="test", num_proc=num_proc_load_dataset)
     # dataset = load_dataset("openwebtext", num_proc=num_proc_load_dataset)
 
     # owt by default only contains the 'train' split, so create a test split
@@ -70,7 +70,7 @@ if __name__ == '__main__':
     # concatenate all the ids in each dataset into one large file we can use for training
     main_path = "/lustre/fswork/projects/rech/fku/uir17ua/data"
     # for split, dset in tokenized.items():
-    total_batches = 1024 * 20
+    total_batches = 1024
     # print(f"Preparing split {split} for size {total_batches}...\n")
     arr_len = np.sum(dataset['len'], dtype=np.uint64)
 
