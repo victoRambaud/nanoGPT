@@ -72,7 +72,7 @@ if __name__ == '__main__':
     # for split, dset in tokenized.items():
     total_batches = 1024
     # print(f"Preparing split {split} for size {total_batches}...\n")
-    arr_len = np.sum(dataset['len'], dtype=np.uint64)
+    arr_len = np.sum(tokenized['len'], dtype=np.uint64)
 
     filename = os.path.join(os.path.dirname(__file__), f'{split}_{total_batches}.bin')
     dtype = np.uint16 # (can do since enc.max_token_value == 50256 is < 2**16)
