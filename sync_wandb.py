@@ -6,10 +6,10 @@ import subprocess
 
 def sync_run(run_path: str):
     print(f"[SYNC] {run_path}")
-    try:
-        subprocess.run([sys.executable, "-m", "wandb", "sync", run_path], check=False)
-    except Exception as e:
-        print(f"[ERROR] Sync failed for {run_path}: {e}")
+    subprocess.run([sys.executable, "-m", "wandb", "sync", run_path], check=False)
+    print()
+    # except Exception as e:
+    #     print(f"[ERROR] Sync failed for {run_path}: {e}")
 
 
 def sync_all_runs(base_dir="wandb", last_n = None):
@@ -40,7 +40,10 @@ def sync_all_runs(base_dir="wandb", last_n = None):
     print("Starting sequential sync...\n")
 
     for run in run_dirs:
-        sync_run(run)
+        try:
+            sync_run(run)
+        except:
+            pass
 
     print("\nAll selected runs have been synced.")
 
