@@ -15,7 +15,7 @@ init_from = "resume"  # 'scratch' or 'resume' or 'gpt2*'
 
 # wandb logging
 wandb_log = True  # disabled by default
-wandb_project = "gpt2-openweb"
+wandb_project = "gpt2-openweb-eval"
 wandb_mode = "offline"
 
 # data
