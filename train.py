@@ -349,8 +349,8 @@ if __name__ == "__main__":
         }
         for split, block_muls in split_size_dict.items():
             for m in block_muls:
-                losses = torch.zeros(eval_iters)
-                perplexities = torch.zeros(eval_iters)
+                losses = torch.zeros(eval_iters*m)
+                perplexities = torch.zeros(eval_iters*m)
                 for k in range(eval_iters*m):
                     blk_sz = block_size * m
                     bs = batch_size // m
