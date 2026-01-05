@@ -199,7 +199,7 @@ if __name__ == "__main__":
             data = np.memmap(os.path.join(data_dir, "train.bin"), dtype=np.uint16, mode="r")
         else:
             # data = np.memmap(os.path.join(data_dir, "val.bin"), dtype=np.uint16, mode="r")
-            data = np.memmap(os.path.join("/lustre/fswork/projects/rech/fku/uir17ua/dev/nanoGPT/data/pg19", "train_20.bin"), dtype=np.uint16, mode="r")
+            data = np.memmap(os.path.join("/lustre/fswork/projects/rech/fku/uir17ua/dev/nanoGPT/data/pg19", "train_100.bin"), dtype=np.uint16, mode="r")
         
         ix = torch.randint(len(data) - blk_sz, (btch_sz,))
         x = torch.stack(
