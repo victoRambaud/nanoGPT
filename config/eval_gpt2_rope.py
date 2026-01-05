@@ -5,7 +5,7 @@
 out_dir = "out"
 wandb_run_name = "ROPE_L12_n768id_468"
 ckpt_name = "checkpoint-90000"
-ckpt_path = "/lustre/fswork/projects/rech/fku/uir17ua/dev/nanoGPT/out/ROPE_L12_n768id_468/checkpoint-84000/ckpt.pt"
+ckpt_path = "/lustre/fswork/projects/rech/fku/uir17ua/dev/nanoGPT/out/ROPE_L12_n768id_468/checkpoint-40000/ckpt.pt"
 eval_interval = 2000
 log_interval = 1
 eval_iters = 200
