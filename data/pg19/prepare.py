@@ -28,13 +28,13 @@ if __name__ == '__main__':
     # dataset = load_dataset("openwebtext", num_proc=num_proc_load_dataset)
 
     # owt by default only contains the 'train' split, so create a test split
-    split_dataset = dataset.train_test_split(
-        test_size=0.0005,
-        seed=2357,
-        shuffle=True
-    )
+    # split_dataset = dataset.train_test_split(
+    #     test_size=0.0005,
+    #     seed=2357,
+    #     shuffle=True
+    # )
     
-    split_dataset['val'] = split_dataset.pop('test') # rename the test split to val
+    # split_dataset['val'] = split_dataset.pop('test') # rename the test split to val
 
     # this results in:
     # >>> split_dataset
@@ -58,34 +58,35 @@ if __name__ == '__main__':
         return out
 
     # tokenize the dataset
-    tokenized = split_dataset.map(
+    tokenized = dataset.map(
         process,
         remove_columns=['text'],
         desc="tokenizing the splits",
         num_proc=num_proc,
     )
     total_batches = 4096
+    split = "train"
     # multipliers = [2, 4, 8, 16, 32]
     # concatenate all the ids in each dataset into one large file we can use for training
     main_path = "/lustre/fswork/projects/rech/fku/uir17ua/data"
-    for split, dset in tokenized.items():
-        total_batches = 1024
-        print(f"Preparing split {split} for size {total_batches}...\n")
-        arr_len = np.sum(dset['len'], dtype=np.uint64)
+    # for split, dset in tokenized.items():
+    total_batches = 1024
+    # print(f"Preparing split {split} for size {total_batches}...\n")
+    arr_len = np.sum(dataset['len'], dtype=np.uint64)
 
-        filename = os.path.join(os.path.dirname(__file__), f'{split}_{total_batches}.bin')
-        dtype = np.uint16 # (can do since enc.max_token_value == 50256 is < 2**16)
-        arr = np.memmap(filename, dtype=dtype, mode='w+', shape=(arr_len,))
-        
-        idx = 0
-        for batch_idx in tqdm(range(total_batches), desc=f'writing {filename}'):
-            # Batch together samples for faster write
-            batch = dset.shard(num_shards=total_batches, index=batch_idx, contiguous=True).with_format('numpy')
-            arr_batch = np.concatenate(batch['ids'])
-            # Write into mmap
-            arr[idx : idx + len(arr_batch)] = arr_batch
-            idx += len(arr_batch)
-        arr.flush()
+    filename = os.path.join(os.path.dirname(__file__), f'{split}_{total_batches}.bin')
+    dtype = np.uint16 # (can do since enc.max_token_value == 50256 is < 2**16)
+    arr = np.memmap(filename, dtype=dtype, mode='w+', shape=(arr_len,))
+    
+    idx = 0
+    for batch_idx in tqdm(range(total_batches), desc=f'writing {filename}'):
+        # Batch together samples for faster write
+        batch = tokenized.shard(num_shards=total_batches, index=batch_idx, contiguous=True).with_format('numpy')
+        arr_batch = np.concatenate(batch['ids'])
+        # Write into mmap
+        arr[idx : idx + len(arr_batch)] = arr_batch
+        idx += len(arr_batch)
+    arr.flush()
 
     # train.bin is ~17GB, val.bin ~8.5MB
     # train has ~9B tokens (9,035,582,198)
