@@ -352,7 +352,7 @@ if __name__ == "__main__":
             for m in block_muls:
                 losses = torch.zeros(int(eval_iters*m))
                 perplexities = torch.zeros(int(eval_iters*m))
-                for k in range(eval_iters*m):
+                for k in range(int(eval_iters*m)):
                     blk_sz = int(block_size * m)
                     bs = max(1, int(batch_size / m))
                     X, Y = get_batch(split, blk_sz=blk_sz, btch_sz=bs)
