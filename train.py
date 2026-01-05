@@ -301,8 +301,6 @@ if __name__ == "__main__":
         for k in ["n_layer", "n_head", "n_embd", "block_size", "bias", "vocab_size"]:
             model_args[k] = getattr(model.config, k)
 
-    if eval_only:
-        wandb_run_name = f"eval_{wandb_run_name}"
 
     # crop down the model block size if desired, using model surgery
     if block_size < model.config.block_size:
@@ -390,7 +388,10 @@ if __name__ == "__main__":
     # logging
     if wandb_log and master_process:
         import wandb
-        wandb_run_name = wandb_run_name + f"id_{random.randint(0, 1000)}"
+        if not eval_only:
+            wandb_run_name = wandb_run_name + f"id_{random.randint(0, 1000)}" 
+        else:
+            wandb_run_name = f"eval_{wandb_run_name}"
         wandb.init(
             project=wandb_project, name=wandb_run_name, config=config, mode=wandb_mode
         )
@@ -405,10 +406,10 @@ if __name__ == "__main__":
 
         if iter_num % eval_interval == 0 and master_process:
             blimp_results = blimp_evaluator.evaluate_blimp_all()
-            if wandb_log:
-                wandb.log(
-                    {"iter": iter_num, **blimp_results}
-                )
+            # if wandb_log:
+            #     wandb.log(
+            #         {"iter": iter_num, **blimp_results}
+            #     )
 
         # determine and set the learning rate for this iteration
         lr = get_lr(iter_num) if decay_lr else learning_rate
