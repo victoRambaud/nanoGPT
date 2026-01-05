@@ -70,7 +70,7 @@ if __name__ == '__main__':
     # concatenate all the ids in each dataset into one large file we can use for training
     main_path = "/lustre/fswork/projects/rech/fku/uir17ua/data"
     # for split, dset in tokenized.items():
-    total_batches = 20
+    total_batches = 100
     # print(f"Preparing split {split} for size {total_batches}...\n")
     arr_len = np.sum(tokenized['len'], dtype=np.uint64)
 
