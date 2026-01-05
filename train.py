@@ -353,7 +353,7 @@ if __name__ == "__main__":
                 perplexities = torch.zeros(eval_iters*m)
                 for k in range(eval_iters*m):
                     blk_sz = block_size * m
-                    bs = batch_size // m
+                    bs = max(1, batch_size // m)
                     X, Y = get_batch(split, blk_sz=blk_sz, btch_sz=bs)
                     with ctx:
                         logits, loss = model(X, Y)
