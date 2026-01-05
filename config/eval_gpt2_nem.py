@@ -3,15 +3,15 @@
 # $ torchrun --standalone --nproc_per_node=8 train.py config/train_gpt2.py
 
 out_dir = "out"
-wandb_run_name = "nROPE_invscale_True_L12_n768_base1024_rank8_ls0.0id_853"
-ckpt_path = "/lustre/fswork/projects/rech/fku/uir17ua/dev/nanoGPT/out/nROPE_invscale_True_L12_n768_base1024_rank8_ls0.0id_853/checkpoint-46000/ckpt.pt"
+wandb_run_name = "nEM_invscale_False_qkposTrue_L12_n768_base1024_rank8_ls0.0id_415"
+ckpt_path = "/lustre/fswork/projects/rech/fku/uir17ua/dev/nanoGPT/out/nEM_invscale_False_qkposTrue_L12_n768_base1024_rank8_ls0.0id_415/checkpoint-46000/ckpt.pt"
 ckpt_name = ""
 eval_interval = 2000
 log_interval = 1
 eval_iters = 200
-eval_only = True  # if True, script exits right after the first eval
+eval_only = False  # if True, script exits right after the first eval
 always_save_checkpoint = True  # if True, always save a checkpoint after each eval
-init_from = "resume"  # 'scratch' or 'resume' or 'gpt2*'
+init_from = "scratch"  # 'scratch' or 'resume' or 'gpt2*'
 
 # wandb logging
 wandb_log = True  # disabled by default
@@ -30,14 +30,14 @@ head_dim = 64
 n_embd = 768
 dropout = 0.0  # for pretraining 0 is good, for finetuning try 0.1+
 bias = False  # do we use bias inside LayerNorm and Linear layers?
-rope: bool = True
+rope: bool = False
 cope: bool = False
+transformer_type: str = "nEM"
+em_qk_positions: bool = True
 working_memory: bool = False
 episodic_memory: bool = False
-n_episodic_memory: bool = False
-transformer_type: str = "nWM"
-n_working_memory: bool = True
-inv_scale_attn: bool = True
+n_episodic_memory: bool = True
+inv_scale_attn: bool = False
 em_wm: bool = False
 n_approx_steps: int = -1
 dt_rank: int = 8
@@ -58,7 +58,7 @@ if init_from == "scratch":
     elif transformer_type == "nWM" and rope:
         wandb_run_name = f"nROPE_invscale_{inv_scale_attn}_L{n_layer}_n{n_embd}_base{base_freq}_rank{dt_rank}_ls{block_layer_scaling_ratio}"
     elif transformer_type == "nEM":
-        wandb_run_name = f"nEM_invscale_{inv_scale_attn}_L{n_layer}_n{n_embd}_base{base_freq}_rank{dt_rank}_ls{block_layer_scaling_ratio}"
+        wandb_run_name = f"nEM_invscale_{inv_scale_attn}_qkpos{em_qk_positions}_L{n_layer}_n{n_embd}_base{base_freq}_rank{dt_rank}_ls{block_layer_scaling_ratio}"
     elif cope:
         wandb_run_name = f"COPE_L{n_layer}_n{n_embd}"
         transformer_type = "WM"

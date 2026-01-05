@@ -3,9 +3,8 @@
 # $ torchrun --standalone --nproc_per_node=8 train.py config/train_gpt2.py
 
 out_dir = "out"
-wandb_run_name = "nROPE_invscale_True_L12_n768_base1024_rank8_ls0.0id_853"
-ckpt_path = "/lustre/fswork/projects/rech/fku/uir17ua/dev/nanoGPT/out/nROPE_invscale_True_L12_n768_base1024_rank8_ls0.0id_853/checkpoint-46000/ckpt.pt"
-ckpt_name = ""
+wandb_run_name = "nWM_invscale_True_L12_n768_base1024_rank8_ls0.0id_265"
+ckpt_path = "/lustre/fswork/projects/rech/fku/uir17ua/dev/nanoGPT/out/nWM_invscale_True_L12_n768_base1024_rank8_ls0.0id_265/checkpoint-46000/ckpt.pt"
 eval_interval = 2000
 log_interval = 1
 eval_iters = 200
@@ -30,7 +29,7 @@ head_dim = 64
 n_embd = 768
 dropout = 0.0  # for pretraining 0 is good, for finetuning try 0.1+
 bias = False  # do we use bias inside LayerNorm and Linear layers?
-rope: bool = True
+rope: bool = False
 cope: bool = False
 working_memory: bool = False
 episodic_memory: bool = False
@@ -45,6 +44,7 @@ base_freq = block_size
 block_max_init: float = 1.0
 block_layer_scaling_ratio: float = 0.
 
+# run name
 # run name
 if init_from == "scratch":
     if transformer_type == "WM":
