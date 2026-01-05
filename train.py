@@ -301,6 +301,9 @@ if __name__ == "__main__":
         for k in ["n_layer", "n_head", "n_embd", "block_size", "bias", "vocab_size"]:
             model_args[k] = getattr(model.config, k)
 
+    if eval_only:
+        wandb_run_name = f"eval_{wandb_run_name}"
+
     # crop down the model block size if desired, using model surgery
     if block_size < model.config.block_size:
         model.crop_block_size(block_size)
@@ -349,18 +352,22 @@ if __name__ == "__main__":
         for split, block_muls in split_size_dict.items():
             for m in block_muls:
                 losses = torch.zeros(eval_iters)
+                perplexities = torch.zeros(eval_iters)
                 for k in range(eval_iters*m):
                     blk_sz = block_size * m
                     bs = batch_size // m
                     X, Y = get_batch(split, blk_sz=blk_sz, btch_sz=bs)
                     with ctx:
                         logits, loss = model(X, Y)
+                        perplexity = torch.exp(loss).item()
                     losses[k] = loss.item()
+                    perplexities[k] = perplexity
                 if m > 1:
                     out_split = f"split_{str(blk_sz)}"
                 else:
                     out_split = split
                 out[out_split] = losses.mean()
+                out[f"{out_split}_ppl"] = perplexities.mean()
         model.train()
         return out
 
@@ -422,6 +429,10 @@ if __name__ == "__main__":
                     "lr": lr,
                     "mfu": running_mfu * 100,  # convert to percentage
                 }
+                for k, v in losses.items():
+                    if k != "train" or k != "val":
+                        wandb_dict[k] = v
+
                 wandb.log(wandb_dict)
             if losses["val"] < best_val_loss or always_save_checkpoint:
                 best_val_loss = losses["val"]
