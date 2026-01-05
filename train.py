@@ -27,7 +27,7 @@ import numpy as np
 import torch
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import init_process_group, destroy_process_group
-from typing import Tuple, Dict
+from typing import Tuple, Dict, Optional
 
 from models.gpt import GPT
 from models.transformer_utils import TransformerConfig
@@ -187,17 +187,20 @@ if __name__ == "__main__":
     data_dir = os.path.join("data", dataset)
 
 
-    def get_batch(split: str, blk_sz=None) -> Tuple[torch.Tensor, torch.Tensor]:
+    def get_batch(split: str, blk_sz: Optional[int]=None, btch_sz: Optional[int]=None) -> Tuple[torch.Tensor, torch.Tensor]:
         # We recreate np.memmap every batch to avoid a memory leak, as per
         # https://stackoverflow.com/questions/45132940/numpy-memmap-memory-usage-want-to-iterate-once/61472122#61472122
         if blk_sz is None:
             blk_sz = block_size
+        if btch_sz is None:
+            btch_sz = batch_size
+
         if split == "train":
             data = np.memmap(os.path.join(data_dir, "train.bin"), dtype=np.uint16, mode="r")
         else:
             data = np.memmap(os.path.join(data_dir, "val.bin"), dtype=np.uint16, mode="r")
         
-        ix = torch.randint(len(data) - blk_sz, (batch_size,))
+        ix = torch.randint(len(data) - blk_sz, (btch_sz,))
         x = torch.stack(
             [torch.from_numpy((data[i : i + blk_sz]).astype(np.int64)) for i in ix]
         )
@@ -340,15 +343,16 @@ if __name__ == "__main__":
         model.eval()
         split_size_dict = {
             "train": (1,),
-            # "val": (1, 2, 4, 8, 16),
-            "val": (1, 2),
+            "val": (1, 2, 4, 8, 16),
+            # "val": (1, 2),
         }
         for split, block_muls in split_size_dict.items():
             for m in block_muls:
                 losses = torch.zeros(eval_iters)
-                for k in range(eval_iters):
+                for k in range(eval_iters*m):
                     blk_sz = block_size * m
-                    X, Y = get_batch(split, blk_sz=blk_sz)
+                    bs = batch_size // m
+                    X, Y = get_batch(split, blk_sz=blk_sz, btch_sz=bs)
                     with ctx:
                         logits, loss = model(X, Y)
                     losses[k] = loss.item()
