@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --output=TravailGPU%j.out # fichier de sortie (%j = job ID)
 #SBATCH --error=TravailGPU%j.err # fichier d’erreur (%j = job ID)
-#SBATCH --job-name=nROPE
+#SBATCH --job-name=EV-nEM
 #SBATCH --account=fku@h100
 ##SBATCH -A fku@cpu
 
