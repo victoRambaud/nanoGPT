@@ -7,7 +7,7 @@ import torch.nn.functional as F
 
 from dataclasses import dataclass
 
-from typing import Optional, Tuple, Dict
+from typing import Optional, Tuple, Dict, List
 
 
 class DyT(nn.Module):
@@ -87,6 +87,9 @@ class TransformerConfig:
     block_share_rotation: bool = False  # use the same rotation matrices per head
     commute: bool = True
     tanh_alpha: float = 1.0
+    follow_rank: bool = False
+    init_same_head: bool = True
+    shared_inner_theta: bool = True
 
     freq_init_uniform: bool = False
 
@@ -137,9 +140,32 @@ def log_normal_arange(k, max_freq: float, device="cpu") -> torch.Tensor:
     return freqs
 
 
-def init_rotation_matrix(config: TransformerConfig, layer_index: Optional[int] = None) -> torch.Tensor:
+def blocks_to_repeat(num_blocks: int, dt_rank: int) -> List[int]:
+    """Repeats the initialization based on rank size.
+    Allows to initialize different axis in the case of dt_rank-naigation (ND-navigation)
+
+    Args:
+        num_blocks (int): _description_
+        dt_rank (int): _description_
+
+    Returns:
+        List[int]: List of block size dedicated to each dimension
+    """
+    nbs = list()
+    m = num_blocks // dt_rank
+    for n in range(dt_rank):
+        if n < dt_rank - 1:
+            nbs.append(m)
+        else:
+            nbs.append(m + (num_blocks % dt_rank))
+    return nbs
+
+
+def init_rotation_matrix(
+    config: TransformerConfig,
+    base_freq: Optional[int] = None,
+) -> Tuple[torch.Tensor]:
     # TODO change init for higher dimension
-    # S = torch.randn(config.n_diag_blocks, config.diag_block_size, config.diag_block_size, dtype=torch.float32)
     S = torch.zeros(
         config.n_diag_blocks,
         config.diag_block_size,
@@ -153,14 +179,39 @@ def init_rotation_matrix(config: TransformerConfig, layer_index: Optional[int] =
             config.block_max_init, config.block_min_init, step=config.step_block
         )
     else:
-        if config.block_layer_scaling_ratio > 0:
-            s = 2**(1/config.block_layer_scaling_ratio)
-            base_freq = config.base_freq / (s**layer_index)
+        base_freq = config.base_freq
+        # if config.block_layer_scaling_ratio > 0:
+        #     s = 2 ** (1 / config.block_layer_scaling_ratio)
+        #     base_freq = base_freq / (s**layer_index)
+        # else:
+        #     base_freq = base_freq**base_pow
+
+        if not config.follow_rank:
+            freqs = config.block_max_init * (
+                (base_freq) ** (
+                    -(
+                        (torch.arange(1, 1 + config.n_diag_blocks) / config.n_diag_blocks)
+                        ** config.freq_init_alpha
+                    )
+                )
+            )
         else:
-            base_freq = config.base_freq
-        # freqs = config.block_max_init * ((base_freq) ** (-(torch.arange(0, config.n_diag_blocks)/config.n_diag_blocks)**config.freq_init_alpha))
-        freqs = config.block_max_init * ((base_freq) ** (-(torch.arange(1, 1+config.n_diag_blocks)/config.n_diag_blocks)**config.freq_init_alpha))
-    # freqs = log_normal_arange(k=config.n_diag_blocks, max_freq=config.block_max_init)
+            nbs = blocks_to_repeat(config.n_diag_blocks, config.dt_rank)
+            freq_list = list()
+            for n_diag_blocks in nbs:
+                # n_diag_blocks = config.n_diag_blocks // config.dt_rank
+                freqs = config.block_max_init * (
+                    (base_freq) ** (
+                        -(
+                            (torch.arange(1, 1 + n_diag_blocks) / n_diag_blocks)
+                            ** config.freq_init_alpha
+                        )
+                    )
+                )
+                freq_list.append(freqs)
+            
+            freqs = torch.concat(freq_list, dim=0)
+
     S = S * freqs.unsqueeze(-1).unsqueeze(-1)
     return S, freqs
 
@@ -382,6 +433,21 @@ class LearnableFreqs2(nn.Module):
             self.freqs_ema.values = f
         f = torch.sqrt(f**2)
         return f
+    
+
+class ThetaEmbedder(nn.Module):
+    def __init__(self, config: TransformerConfig):
+        super().__init__()
+
+        self.config = config
+        self.in_proj = nn.Linear(config.n_embd, config.dt_rank * config.n_head)
+        self.out_proj = nn.Linear(config.dt_rank, config.n_diag_blocks)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        b, l, _ = x.shape
+        theta_in = self.in_proj(x).view(b, l, self.config.n_head, -1)
+        theta_out = self.out_proj(theta_in)
+        return theta_out
 
 
 class RotationModule(nn.Module):
@@ -390,28 +456,50 @@ class RotationModule(nn.Module):
 
         self.config = config
 
-        self.theta_embedd = nn.Sequential(
-            nn.Linear(config.n_embd, config.dt_rank),
-            nn.Linear(config.dt_rank, config.n_head * config.n_diag_blocks, bias=False),
-
-        )
-        self.theta_act = DyT(
-            dim=config.n_diag_blocks,
-            alpha=config.tanh_alpha,
-            requires_grad=True,
-        ) if config.tanh_alpha > 0 else nn.Identity()
-        # init_two_linear_for_gain(0.15, self.theta_embedd[0], self.theta_embedd[1])
-        S, freqs = init_rotation_matrix(config, layer_index=layer_index)
-        if config.n_approx_steps >= 0:
-            self.S = nn.Parameter(S)
-
-        else:
-            # (b, l, nh, nb, 1)
-            self.freqs = nn.Parameter(
-                freqs.squeeze(-1).unsqueeze(0).unsqueeze(0).unsqueeze(0)
+        if config.shared_inner_theta:
+            self.theta_embedd = nn.Sequential(
+                nn.Linear(config.n_embd, config.dt_rank),
+                nn.Linear(config.dt_rank, config.n_head * config.n_diag_blocks, bias=False),
             )
-            # self.freq_mul = nn.Parameter(config.block_max_init*torch.ones(1))
-            # self.freqs = LearnableFreqs(freqs.squeeze(-1).unsqueeze(0).unsqueeze(0).unsqueeze(0))
+        else:
+            self.theta_embedd = ThetaEmbedder(config)
+        
+        self.theta_act = (
+            DyT(
+                dim=config.n_diag_blocks,
+                alpha=config.tanh_alpha,
+                requires_grad=True,
+            )
+            if config.tanh_alpha > 0
+            else nn.Identity()
+        )
+
+        if config.init_same_head:
+            S, freqs = init_rotation_matrix(config)
+
+            if config.n_approx_steps >= 0:
+                self.S = nn.Parameter(S)
+            else:
+                # (b, l, nh, nb, 1)
+                self.freqs = nn.Parameter(
+                    freqs.squeeze(-1).unsqueeze(0).unsqueeze(0).unsqueeze(0)
+                )
+        else:
+            head_freqs = list()
+            # base_freqs = [config.base_freq / (2**i) for i in range(config.n_head)]
+            base_freqs = torch.logspace(
+                torch.log2(torch.tensor(config.min_base_freq)),
+                torch.log2(torch.tensor(config.base_freq)),
+                steps=config.n_head,
+                base=2,
+            )
+            for h in range(self.config.n_head):
+                S, freqs = init_rotation_matrix(
+                    config, layer_index=layer_index, base_pow=1, base_freq=base_freqs[h]
+                )
+                head_freqs.append(freqs)
+            freqs = torch.stack(head_freqs, dim=0)
+            self.freqs = nn.Parameter(freqs.squeeze(-1).unsqueeze(0).unsqueeze(0))
 
         self.matrix_powers = None
         self.approx_coeffs = None
@@ -640,7 +728,10 @@ class RotationModule(nn.Module):
         """
         t0 = time.time()
         b, l, _ = x.shape
-        theta = self.theta_embedd(x).view(b, l, self.config.n_head, -1)  # b, l, nh, nb
+        if self.config.shared_inner_theta:
+            theta = self.theta_embedd(x).view(b, l, self.config.n_head, -1)  # b, l, nh, nb
+        else:
+            theta = self.theta_embedd(x)
         # theta_norm = theta.norm(p=1, dim=-1).mean().item()
         # theta_var = theta.var(dim=-1).mean().item()
 

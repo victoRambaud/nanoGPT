@@ -76,6 +76,8 @@ if __name__ == "__main__":
     n_working_memory: bool = False
     inv_scale_attn: bool = False
     em_qk_positions: bool = True
+    follow_rank: bool = False
+    init_same_head: bool = False
     transformer_type = "WM"
     em_wm: bool = False
     n_approx_steps: int = -1
@@ -314,7 +316,7 @@ if __name__ == "__main__":
         )
     model.to(device)
 
-    eval_mode = "normal"
+    eval_mode = "pg19_normal"
 
     # initialize a GradScaler. If enabled=False scaler is a no-op
     scaler = torch.cuda.amp.GradScaler(enabled=(dtype == "float16"))
