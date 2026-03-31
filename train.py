@@ -77,7 +77,8 @@ if __name__ == "__main__":
     inv_scale_attn: bool = False
     em_qk_positions: bool = True
     follow_rank: bool = False
-    init_same_head: bool = False
+    init_same_head: bool = True
+    shared_inner_theta: bool = False
     transformer_type = "WM"
     em_wm: bool = False
     n_approx_steps: int = -1
@@ -89,7 +90,7 @@ if __name__ == "__main__":
     # run name
     if init_from == "scratch":
         if transformer_type == "WM":
-            wandb_run_name = f"WM_L{n_layer}_n{n_embd}_base{base_freq}_rank{dt_rank}_ls{block_layer_scaling_ratio}"
+            wandb_run_name = f"WM_L{n_layer}_n{n_embd}_base{base_freq}_rank{dt_rank}_ls{block_layer_scaling_ratio}_innerTH{shared_inner_theta}"
         elif transformer_type == "EM":
             wandb_run_name = f"EM_L{n_layer}_n{n_embd}_base{base_freq}_rank{dt_rank}_ls{block_layer_scaling_ratio}"
         elif transformer_type == "nEMWM":
