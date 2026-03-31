@@ -38,6 +38,7 @@ working_memory: bool = True
 episodic_memory: bool = False
 n_episodic_memory: bool = False
 inv_scale_attn: bool = False
+shared_inner_theta: bool = False
 em_wm: bool = False
 n_approx_steps: int = -1
 dt_rank: int = 8
@@ -48,7 +49,7 @@ block_layer_scaling_ratio: float = 0.
 # run name
 if init_from == "scratch":
     if transformer_type == "WM":
-        wandb_run_name = f"WM_L{n_layer}_n{n_embd}_base{base_freq}_rank{dt_rank}_ls{block_layer_scaling_ratio}"
+        wandb_run_name = f"WM_L{n_layer}_n{n_embd}_base{base_freq}_rank{dt_rank}_ls{block_layer_scaling_ratio}_innerTH{shared_inner_theta}"
     elif transformer_type == "EM":
         wandb_run_name = f"EM_L{n_layer}_n{n_embd}_base{base_freq}_rank{dt_rank}_ls{block_layer_scaling_ratio}"
     elif transformer_type == "nEMWM":
