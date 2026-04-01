@@ -110,17 +110,18 @@ if __name__ == "__main__":
             transformer_type = "WM"
 
     # adamw optimizer
-    learning_rate = 6e-4 # max learning rate
-    max_iters = 600000 # total number of training iterations
+    learning_rate = 5e-4  # max learning rate
+    max_iters = 600000  # total number of training iterations
     weight_decay = 1e-1
     beta1 = 0.9
     beta2 = 0.95
-    grad_clip = 1.0 # clip gradients at this value, or disable if == 0.0
+    grad_clip = 1.0  # clip gradients at this value, or disable if == 0.0
+
     # learning rate decay settings
-    decay_lr = True # whether to decay the learning rate
-    warmup_iters = 2000 # how many steps to warm up for
-    lr_decay_iters = 600000 # should be ~= max_iters per Chinchilla
-    min_lr = 6e-5 # minimum learning rate, should be ~= learning_rate/10 per Chinchilla
+    decay_lr = True  # whether to decay the learning rate
+    warmup_iters = 4000  # how many steps to warm up for
+    lr_decay_iters = 600000  # should be ~= max_iters per Chinchilla
+    min_lr = 1e-5  # minimum learning rate, should be ~= learning_rate/10 per Chinchilla
 
     # DDP settings
     backend = "nccl"  # 'nccl', 'gloo', etc.
@@ -416,12 +417,11 @@ if __name__ == "__main__":
     running_mfu = -1.0
     while True:
 
-        if iter_num % eval_interval == 0 and eval_mode == "pg19_new":
-            pg19_ppl = eval_pg19(model=model, max_len=2048, batch_size=batch_size//2)
-        #     blimp_results = blimp_evaluator.evaluate_blimp_all()
+        if iter_num % eval_interval == 0 and master_process:
+            blimp_results = blimp_evaluator.evaluate_blimp_all()
             if wandb_log:
                 wandb.log(
-                    {"iter": iter_num, "pg19_2048_ppl": pg19_ppl}
+                    {"iter": iter_num, **blimp_results}
                 )
 
         # determine and set the learning rate for this iteration
