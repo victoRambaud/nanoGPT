@@ -352,31 +352,14 @@ if __name__ == "__main__":
     def estimate_loss() -> Dict:
         out = {}
         model.eval()
-        split_size_dict = {
-            "train": (1,),
-            "val": (1, 1.25, 1.5, 2, 3, 4),
-            # "val": (1, 2, 4, 8, 16),
-            # "val": (1, 2),
-        }
-        for split, block_muls in split_size_dict.items():
-            for m in block_muls:
-                losses = torch.zeros(int(eval_iters*m))
-                perplexities = torch.zeros(int(eval_iters*m))
-                for k in range(int(eval_iters*m)):
-                    blk_sz = int(block_size * m)
-                    bs = max(1, int(batch_size / m))
-                    X, Y = get_batch(split, blk_sz=blk_sz, btch_sz=bs)
-                    with ctx:
-                        logits, loss = model(X, Y)
-                        perplexity = torch.exp(loss).item()
-                    losses[k] = loss.item()
-                    perplexities[k] = perplexity
-                if m > 1:
-                    out_split = f"split_{str(blk_sz)}"
-                else:
-                    out_split = split
-                out[out_split] = losses.mean()
-                out[f"{out_split}_ppl"] = perplexities.mean()
+        for split in ["train", "val"]:
+            losses = torch.zeros(eval_iters)
+            for k in range(eval_iters):
+                X, Y = get_batch(split)
+                with ctx:
+                    logits, loss = model(X, Y)
+                losses[k] = loss.item()
+            out[split] = losses.mean()
         model.train()
         return out
 
