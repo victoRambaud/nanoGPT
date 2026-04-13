@@ -404,7 +404,7 @@ if __name__ == "__main__":
     while True:
 
         if eval_blimp and iter_num % eval_interval == 0 and master_process:
-            blimp_results = blimp_evaluator.evaluate_blimp_all()
+            blimp_results = blimp_evaluator.evaluate_blimp_all("island")
             if wandb_log:
                 wandb.log(
                     {"iter": iter_num, **blimp_results}
