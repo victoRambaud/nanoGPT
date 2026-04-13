@@ -107,6 +107,7 @@ class BlimpEvaluator:
         self,
         device: str | torch.device = "cuda",
         max_seq_len: int | None = None,
+        subsets_contains: str | None = None
     ) -> Dict[str, Dict[str, Any]]:
         """
         Evaluate on all 67 BLiMP subsets and return a dict of results.
@@ -122,17 +123,18 @@ class BlimpEvaluator:
             ds_list = ds_list[:self.n_datasets]
             
         for subset in ds_list:
-            res = self.evaluate_blimp_subset(
-                blimp_subset=subset,
-                device=device,
-                max_seq_len=max_seq_len,
-            )
-            for k, v in res.items():
-                if "total" not in k:
-                    print(f"{k}: {v}")
-                results[k] = v
-            total_correct += res[f"{subset}_correct"]
-            total_items += res[f"{subset}_total"]
+            if subsets_contains is None or subsets_contains in subset:
+                res = self.evaluate_blimp_subset(
+                    blimp_subset=subset,
+                    device=device,
+                    max_seq_len=max_seq_len,
+                )
+                for k, v in res.items():
+                    if "total" not in k:
+                        print(f"{k}: {v}")
+                    results[k] = v
+                total_correct += res[f"{subset}_correct"]
+                total_items += res[f"{subset}_total"]
 
         results["overall_accuracy"] = (
             total_correct / total_items if total_items > 0 else float("nan")
