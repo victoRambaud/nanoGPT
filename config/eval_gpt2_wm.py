@@ -3,8 +3,8 @@
 # $ torchrun --standalone --nproc_per_node=8 train.py config/train_gpt2.py
 
 out_dir = "out"
-wandb_run_name = "WM_L12_n768_base1024_rank8_ls0.0id_919"
-ckpt_path = "/lustre/fswork/projects/rech/fku/uir17ua/dev/nanoGPT/out/WM_L12_n768_base1024_rank8_ls0.0id_919/checkpoint-40000/ckpt.pt"
+wandb_run_name = "WM_L12_n768_base64_rank16_ls0.0_innerTHFalseid_648id_371"
+ckpt_path = "/lustre/fswork/projects/rech/fku/uir17ua/dev/nanoGPT/out/WM_L12_n768_base64_rank16_ls0.0_innerTHFalseid_648id_371/checkpoint-98000/ckpt.pt"
 eval_interval = 2000
 log_interval = 1
 eval_iters = 200
@@ -35,12 +35,18 @@ working_memory: bool = True
 episodic_memory: bool = False
 n_episodic_memory: bool = False
 transformer_type: str = "WM"
-n_working_memory: bool = True
-inv_scale_attn: bool = True
+em_qk_positions: bool = True
+working_memory: bool = True
+episodic_memory: bool = False
+n_episodic_memory: bool = False
+inv_scale_attn: bool = False
+follow_rank: bool = True
+init_same_head: bool = True
+shared_inner_theta: bool = False
 em_wm: bool = False
 n_approx_steps: int = -1
-dt_rank: int = 8
-base_freq = block_size
+dt_rank: int = 16
+base_freq = 64
 block_max_init: float = 1.0
 block_layer_scaling_ratio: float = 0.
 
