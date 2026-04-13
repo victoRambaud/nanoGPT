@@ -50,6 +50,7 @@ if __name__ == "__main__":
     eval_only = False  # if True, script exits right after the first eval
     always_save_checkpoint = True  # if True, always save a checkpoint after each eval
     init_from = "scratch"  # 'scratch' or 'resume' or 'gpt2*'
+    eval_blimp = False
 
     # wandb logging
     wandb_log = True  # disabled by default
@@ -318,7 +319,9 @@ if __name__ == "__main__":
         )
     model.to(device)
 
-    eval_mode = "pg19_normal"
+    eval_mode = "blimp"
+    if eval_only:
+        eval_blimp = True
 
     # initialize a GradScaler. If enabled=False scaler is a no-op
     scaler = torch.cuda.amp.GradScaler(enabled=(dtype == "float16"))
@@ -340,12 +343,12 @@ if __name__ == "__main__":
     # wrap model into DDP container
     if ddp:
         model = DDP(model, device_ids=[ddp_local_rank])
-
+    n_ds = 4 if not eval_only else None
     blimp_evaluator = BlimpEvaluator(
         model=model,
         device=device,
         max_seq_len=block_size,
-        n_datasets=4
+        n_datasets=n_ds
     )
     # helps estimate an arbitrarily accurate loss over either split using many batches
     @torch.no_grad()
@@ -400,12 +403,12 @@ if __name__ == "__main__":
     running_mfu = -1.0
     while True:
 
-        # if iter_num % eval_interval == 0 and master_process:
-        #     blimp_results = blimp_evaluator.evaluate_blimp_all()
-        #     if wandb_log:
-        #         wandb.log(
-        #             {"iter": iter_num, **blimp_results}
-        #         )
+        if eval_blimp and iter_num % eval_interval == 0 and master_process:
+            blimp_results = blimp_evaluator.evaluate_blimp_all()
+            if wandb_log:
+                wandb.log(
+                    {"iter": iter_num, **blimp_results}
+                )
 
         # determine and set the learning rate for this iteration
         lr = get_lr(iter_num) if decay_lr else learning_rate
