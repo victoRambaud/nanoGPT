@@ -128,6 +128,7 @@ class BlimpEvaluator:
                 max_seq_len=max_seq_len,
             )
             for k, v in res.items():
+                print(f"{k}: {v}")
                 results[k] = v
             total_correct += res[f"{subset}_correct"]
             total_items += res[f"{subset}_total"]
