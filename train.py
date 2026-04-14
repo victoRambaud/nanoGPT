@@ -403,7 +403,7 @@ if __name__ == "__main__":
     running_mfu = -1.0
     while True:
 
-        if eval_blimp and iter_num % eval_interval == 0 and master_process:
+        if eval_blimp and iter_num % (2*eval_interval) == 0 and master_process:
             blimp_results = blimp_evaluator.evaluate_blimp_all(subsets_contains="island")
             if wandb_log:
                 wandb.log(
