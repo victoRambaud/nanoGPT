@@ -137,10 +137,10 @@ class BlimpEvaluator:
                 total_items += res[f"{subset}_total"]
 
         results["overall_accuracy"] = (
-            total_correct / total_items if total_items > 0 else float("nan")
+            total_correct / total_items if total_items > 0 else float(0.)
         )
-        results["overall_correct"] = total_correct
-        results["overall_total"] = total_items
+        # results["overall_correct"] = total_correct
+        # results["overall_total"] = total_items
 
         print("Overall BLiMP accuracy:", results["overall_accuracy"])
         return results
