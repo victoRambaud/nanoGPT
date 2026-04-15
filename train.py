@@ -404,7 +404,7 @@ if __name__ == "__main__":
     while True:
 
         if eval_blimp and iter_num % (2*eval_interval) == 0 and master_process:
-            blimp_results = blimp_evaluator.evaluate_blimp_all(subsets_contains="island")
+            blimp_results = blimp_evaluator.evaluate_blimp_all(subsets_contains=None)
             if wandb_log:
                 wandb.log(
                     {"iter": iter_num, **blimp_results}
