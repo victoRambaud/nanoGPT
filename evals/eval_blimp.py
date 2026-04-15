@@ -99,8 +99,8 @@ class BlimpEvaluator:
 
         return {
             f"{blimp_subset}_accuracy": accuracy,
-            # f"{blimp_subset}_correct": correct,
-            # f"{blimp_subset}_total": total,
+            f"{blimp_subset}_correct": correct,
+            f"{blimp_subset}_total": total,
         }
 
     def evaluate_blimp_all(
@@ -135,6 +135,8 @@ class BlimpEvaluator:
                     results[k] = v
                 total_correct += res[f"{subset}_correct"]
                 total_items += res[f"{subset}_total"]
+                del res[f"{subset}_correct"]
+                del res[f"{subset}_total"]
 
         results["overall_accuracy"] = (
             total_correct / total_items if total_items > 0 else float(0.)
