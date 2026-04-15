@@ -10,8 +10,8 @@
 #SBATCH -C h100
 
 #SBATCH --nodes=1
-#SBATCH --ntasks-per-node=4
-#SBATCH --gres=gpu:4
+#SBATCH --ntasks-per-node=1
+#SBATCH --gres=gpu:1
 
 #SBATCH --cpus-per-task=10
 ##SBATCH --cpus-per-task=3
@@ -22,7 +22,7 @@
 
 ##SBATCH --qos=qos_gpu_h100-t4
 #SBATCH --qos=qos_gpu_h100-dev
-#SBATCH --time=1:00:00
+#SBATCH --time=01:00:00
 #SBATCH --output=logs/gpu_job%j.out
 #SBATCH --error=errors/gpu_job%j.out
 
@@ -39,5 +39,5 @@ export PYTHONPATH=/lustre/fswork/projects/rech/fku/uir17ua/python_libs:$PYTHONPA
 # set -x
 
 # srun --ntasks=4 python -u train.py config/train_gpt2.py
-torchrun --standalone --nproc_per_node=4 train.py config/eval_gpt2_wm.py
+torchrun --standalone --nproc_per_node=1 train.py config/eval_gpt2_wm.py
 # sbatch job.sh
