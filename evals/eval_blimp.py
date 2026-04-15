@@ -99,8 +99,8 @@ class BlimpEvaluator:
 
         return {
             f"{blimp_subset}_accuracy": accuracy,
-            f"{blimp_subset}_correct": correct,
-            f"{blimp_subset}_total": total,
+            # f"{blimp_subset}_correct": correct,
+            # f"{blimp_subset}_total": total,
         }
 
     def evaluate_blimp_all(
