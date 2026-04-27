@@ -46,15 +46,20 @@ import time
 import torch
 import torch.nn.functional as F
 
-
+from models.transformer_utils import TransformerConfig
+from models.gpt import GPT
 # ============================================================================
 # MODEL LOADING — matches train.py checkpoint format
 # ============================================================================
 # Run this script from the repo root (the dir that contains models/, evals/, etc.)
 # so these imports resolve. If you're running from elsewhere, set PYTHONPATH or
 # pass --repo_root.
-from models.gpt import GPT
-from models.transformer_utils import TransformerConfig
+# def _import_model_classes(repo_root: str = None):
+#     if repo_root is not None and repo_root not in sys.path:
+#         sys.path.insert(0, repo_root)
+#     from models.gpt import GPT
+#     from models.transformer_utils import TransformerConfig
+#     return GPT, TransformerConfig
 
 
 def build_model(ckpt_path: str,
@@ -144,15 +149,27 @@ def build_model(ckpt_path: str,
 @torch.no_grad()
 def _forward_logits(model, input_ids):
     """
-    Your GPT.forward returns (logits, loss). Call with targets=None to skip
-    loss computation; we'll do cross-entropy ourselves so we get per-position
-    NLL rather than a scalar mean.
+    nanoGPT-style models commonly take a fast path when targets=None and only
+    return logits at the LAST position (shape [B, 1, V]). For per-token NLL we
+    need logits at every position, so we pass dummy targets to force the model
+    down the full-sequence branch. We then ignore the scalar loss it returns
+    and compute per-position NLL ourselves.
     """
-    out = model(input_ids, None)
+    out = model(input_ids, input_ids)   # dummy targets; we don't use the loss
     if isinstance(out, (tuple, list)):
         logits = out[0]
     else:
         logits = out
+
+    # Sanity: if logits is still [B, 1, V], the model didn't take the bait.
+    # Fall back to a clearer error rather than the cryptic batch-size mismatch.
+    if logits.size(1) != input_ids.size(1):
+        raise RuntimeError(
+            f"Model returned logits of seq_len={logits.size(1)} for input seq_len="
+            f"{input_ids.size(1)}. Your GPT.forward likely has a fast path that "
+            f"only computes the last-position logits. Edit models/gpt.py to "
+            f"return full-sequence logits, or modify _forward_logits in this script."
+        )
     return logits
 
 
