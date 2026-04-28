@@ -266,7 +266,6 @@ if __name__ == "__main__":
         follow_rank=follow_rank,
         init_same_head=init_same_head,
         shared_inner_theta=shared_inner_theta,
-        transformer_type=transformer_type,
         em_wm=em_wm,
     )  # start with model_args from command line
 

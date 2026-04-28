@@ -41,7 +41,6 @@ inv_scale_attn: bool = False
 follow_rank: bool = True
 init_same_head: bool = True
 shared_inner_theta: bool = False
-transformer_type = "WM"
 em_wm: bool = False
 n_approx_steps: int = -1
 dt_rank: int = 4
