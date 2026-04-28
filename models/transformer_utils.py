@@ -90,6 +90,7 @@ class TransformerConfig:
     follow_rank: bool = False
     init_same_head: bool = True
     shared_inner_theta: bool = True
+    log_freq: bool = False
 
     freq_init_uniform: bool = False
 
@@ -476,6 +477,8 @@ class RotationModule(nn.Module):
 
         if config.init_same_head:
             S, freqs = init_rotation_matrix(config)
+            if config.log_freq:
+                freqs = freqs.log()
 
             if config.n_approx_steps >= 0:
                 self.S = nn.Parameter(S)
@@ -499,6 +502,8 @@ class RotationModule(nn.Module):
                 )
                 head_freqs.append(freqs)
             freqs = torch.stack(head_freqs, dim=0)
+            if config.log_freq:
+                freqs = freqs.log()
             self.freqs = nn.Parameter(freqs.squeeze(-1).unsqueeze(0).unsqueeze(0))
 
         self.matrix_powers = None
@@ -657,7 +662,10 @@ class RotationModule(nn.Module):
         return thetaS, {}
 
     def forward_sins(self, theta: torch.Tensor):
-        freqs = torch.sqrt(self.freqs**2)
+        if not self.config.log_freq:
+            freqs = torch.sqrt(self.freqs**2)
+        else:
+            freqs = torch.exp(self.freqs)
         theta = theta * freqs
         cos = torch.cos(theta)
         sin = torch.sin(theta)

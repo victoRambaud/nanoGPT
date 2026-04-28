@@ -87,11 +87,12 @@ if __name__ == "__main__":
     base_freq = 256
     block_max_init: float = 1.0
     block_layer_scaling_ratio: float = 0.
+    log_freq: bool = False
 
     # run name
     if init_from == "scratch":
         if transformer_type == "WM":
-            wandb_run_name = f"WM_L{n_layer}_n{n_embd}_base{base_freq}_rank{dt_rank}_ls{block_layer_scaling_ratio}_innerTH{shared_inner_theta}"
+            wandb_run_name = f"WM_L{n_layer}_n{n_embd}_base{base_freq}_rank{dt_rank}_log_freq{log_freq}"
         elif transformer_type == "EM":
             wandb_run_name = f"EM_L{n_layer}_n{n_embd}_base{base_freq}_rank{dt_rank}_ls{block_layer_scaling_ratio}"
         elif transformer_type == "nEMWM":
@@ -260,7 +261,13 @@ if __name__ == "__main__":
         dt_rank=dt_rank,
         base_freq=base_freq,
         block_max_init=block_max_init,
-        block_layer_scaling_ratio=block_layer_scaling_ratio
+        block_layer_scaling_ratio=block_layer_scaling_ratio,
+        log_freq=log_freq,
+        follow_rank=follow_rank,
+        init_same_head=init_same_head,
+        shared_inner_theta=shared_inner_theta,
+        transformer_type=transformer_type,
+        em_wm=em_wm,
     )  # start with model_args from command line
 
     if init_from == "scratch":

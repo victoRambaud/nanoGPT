@@ -38,15 +38,17 @@ working_memory: bool = True
 episodic_memory: bool = False
 n_episodic_memory: bool = False
 inv_scale_attn: bool = False
-follow_rank: bool = False
+follow_rank: bool = True
 init_same_head: bool = True
-shared_inner_theta: bool = True
+shared_inner_theta: bool = False
+transformer_type = "WM"
 em_wm: bool = False
 n_approx_steps: int = -1
-dt_rank: int = 32
-base_freq = 64
+dt_rank: int = 4
+base_freq = 1024
 block_max_init: float = 1.0
 block_layer_scaling_ratio: float = 0.
+log_freq: bool = True
 
 # run name
 if init_from == "scratch":
