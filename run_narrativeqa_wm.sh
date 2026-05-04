@@ -43,5 +43,5 @@ torchrun --standalone --nproc_per_node=1 eval_narrative.py \
     --ckpt /lustre/fswork/projects/rech/fku/uir17ua/dev/nanoGPT/out/WM_L12_n768_base10000_rank2_ls0.0_innerTHFalseid_703id_95]$ cd WM_L12_n768_base10000_rank2_ls0.0_innerTHFalseid_703/checkpoint-98000/ckpt.pt \
     --tokens data/narrativeqa/narrativeqa_tokens.pt \
     --max_len 16384 \
-    --out_dir results_narrative/wmlog_120k/
+    --out_dir results_narrative/wm10k_120k/
 # sbatch job.sh
