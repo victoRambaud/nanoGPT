@@ -48,6 +48,7 @@ base_freq = 1024
 block_max_init: float = 1.0
 block_layer_scaling_ratio: float = 0.
 log_freq: bool = True
+freq_grad: bool = False
 
 # run name
 if init_from == "scratch":

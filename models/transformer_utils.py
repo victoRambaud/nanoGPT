@@ -91,6 +91,7 @@ class TransformerConfig:
     init_same_head: bool = True
     shared_inner_theta: bool = True
     log_freq: bool = False
+    freq_grad: bool = True
 
     freq_init_uniform: bool = False
 
@@ -504,7 +505,7 @@ class RotationModule(nn.Module):
             freqs = torch.stack(head_freqs, dim=0)
             if config.log_freq:
                 freqs = freqs.log()
-            self.freqs = nn.Parameter(freqs.squeeze(-1).unsqueeze(0).unsqueeze(0))
+            self.freqs = nn.Parameter(freqs.squeeze(-1).unsqueeze(0).unsqueeze(0), requires_grad=config.freq_grad)
 
         self.matrix_powers = None
         self.approx_coeffs = None
