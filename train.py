@@ -84,10 +84,11 @@ if __name__ == "__main__":
     em_wm: bool = False
     n_approx_steps: int = -1
     dt_rank: int = 2
-    base_freq = 256
+    base_freq = 10000
     block_max_init: float = 1.0
     block_layer_scaling_ratio: float = 0.
     log_freq: bool = False
+    freq_grad: bool = False
 
     # run name
     if init_from == "scratch":
@@ -266,6 +267,7 @@ if __name__ == "__main__":
         follow_rank=follow_rank,
         init_same_head=init_same_head,
         shared_inner_theta=shared_inner_theta,
+        freeze_freq=freeze_freq
     )  # start with model_args from command line
 
     if init_from == "scratch":
