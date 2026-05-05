@@ -267,7 +267,7 @@ if __name__ == "__main__":
         follow_rank=follow_rank,
         init_same_head=init_same_head,
         shared_inner_theta=shared_inner_theta,
-        freeze_freq=freeze_freq
+        freq_grad=freq_grad
     )  # start with model_args from command line
 
     if init_from == "scratch":
