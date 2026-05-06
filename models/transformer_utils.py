@@ -182,7 +182,6 @@ def init_rotation_matrix(
         )
     else:
         base_freq = config.base_freq
-        base_freq = 10000
         # if config.block_layer_scaling_ratio > 0:
         #     s = 2 ** (1 / config.block_layer_scaling_ratio)
         #     base_freq = base_freq / (s**layer_index)
