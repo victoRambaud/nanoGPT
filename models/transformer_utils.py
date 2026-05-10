@@ -466,15 +466,17 @@ class RotationModule(nn.Module):
         else:
             self.theta_embedd = ThetaEmbedder(config)
         
-        self.theta_act = (
-            DyT(
-                dim=config.n_diag_blocks,
-                alpha=config.tanh_alpha,
-                requires_grad=True,
-            )
-            if config.tanh_alpha > 0
-            else nn.Identity()
-        )
+        self.theta_act = nn.Tanh()
+        # self.theta_act = (
+        #     # DyT(
+        #     #     dim=config.n_diag_blocks,
+        #     #     alpha=config.tanh_alpha,
+        #     #     requires_grad=True,
+        #     # )
+        #     nn.Tanh()
+        #     if config.tanh_alpha > 0
+        #     else nn.Identity()
+        # )
 
         if config.init_same_head:
             S, freqs = init_rotation_matrix(config)
