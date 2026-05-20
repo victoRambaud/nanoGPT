@@ -450,6 +450,28 @@ class ThetaEmbedder(nn.Module):
         theta_in = self.in_proj(x).view(b, l, self.config.n_head, -1)
         theta_out = self.out_proj(theta_in)
         return theta_out
+    
+
+class ThetaEmbedder2(nn.Module):
+    def __init__(self, config: TransformerConfig):
+        super().__init__()
+
+        self.config = config
+        self.in_proj = nn.Linear(config.n_embd, config.dt_rank * config.n_head)
+        # Parallel projection for all heads: weight shape (n_head, n_diag_blocks, dt_rank)
+        self.out_proj = nn.Parameter(
+            torch.empty(config.n_head, config.n_diag_blocks, config.dt_rank)
+        )
+        nn.init.normal_(self.out_proj, mean=0, std=0.02)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        b, l, _ = x.shape
+        # (b, l, n_head, dt_rank)
+        theta_in = self.in_proj(x).view(b, l, self.config.n_head, -1)
+        # einsum: parallel linear over all heads
+        # (b, l, n_head, dt_rank) x (n_head, n_diag_blocks, dt_rank) -> (b, l, n_head, n_diag_blocks)
+        theta_out = torch.einsum("blhd,hnd->blhn", theta_in, self.out_proj)
+        return theta_out
 
 
 class RotationModule(nn.Module):
@@ -464,7 +486,7 @@ class RotationModule(nn.Module):
                 nn.Linear(config.dt_rank, config.n_head * config.n_diag_blocks, bias=False),
             )
         else:
-            self.theta_embedd = ThetaEmbedder(config)
+            self.theta_embedd = ThetaEmbedder2(config)
         
         self.theta_act = nn.Tanh()
         # self.theta_act = (
