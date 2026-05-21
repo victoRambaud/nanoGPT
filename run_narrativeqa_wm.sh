@@ -40,8 +40,8 @@ export PYTHONPATH=/lustre/fswork/projects/rech/fku/uir17ua/python_libs:$PYTHONPA
 
 # srun --ntasks=4 python -u train.py config/train_gpt2.py
 torchrun --standalone --nproc_per_node=1 eval_narrative.py \
-    --ckpt /lustre/fswork/projects/rech/fku/uir17ua/dev/nanoGPT/out/WM_L12_n768_base10000_rank1_ls0.0_innerTHFalseid_146/checkpoint-84000/ckpt.pt \
+    --ckpt /lustre/fswork/projects/rech/fku/uir17ua/dev/nanoGPT/out/WM_L12_n768_base10000_rank1_ls0.0_innerTHFalseid_373/checkpoint-94000/ckpt.pt \
     --tokens data/narrativeqa/narrativeqa_tokens.pt \
     --max_len 16384 \
-    --out_dir results_narrative/wmfreeze10000tanh_120k/
+    --out_dir results_narrative/wmfreeze10000tanh_120k2/
 # sbatch job.sh
