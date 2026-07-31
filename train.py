@@ -90,6 +90,12 @@ if __name__ == "__main__":
     log_freq: bool = False
     freq_grad: bool = False
 
+    # egoformer
+    commute = True,
+    rotate_values = False,
+    ego2allo = False
+    value_base_freq = 10
+
     # run name
     if init_from == "scratch":
         if transformer_type == "WM":
@@ -267,7 +273,14 @@ if __name__ == "__main__":
         follow_rank=follow_rank,
         init_same_head=init_same_head,
         shared_inner_theta=shared_inner_theta,
-        freq_grad=freq_grad
+        freq_grad=freq_grad,
+
+        # egoformer
+        diag_block_size=dt_rank,
+        commute=commute,
+        rotate_values=rotate_values,
+        ego2allo=ego2allo,
+        value_base_freq=value_base_freq
     )  # start with model_args from command line
 
     if init_from == "scratch":

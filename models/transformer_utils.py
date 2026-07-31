@@ -100,46 +100,44 @@ class TransformerConfig:
     g_scale: float = 0.25
 
     softmax_log_norm: bool = False
+    path_householder: bool = False
+
+    # egoformer
+    ego2allo: bool = False
+    share_ego_encoders: bool = False
+    full_ego_path: bool = False
+    rotate_values: bool = False
+    value_base_freq: float = 1/8
+    linear_decay: float = 5.0
+    attn_outproj: bool = True
+    angle_scale: float = 3.14/2
+    single_freq: bool = False
+    zero_freqs: bool = False
+    diff_norms: bool = False
+    out_norm: bool = True
+    use_mlp: bool = True
 
     def __post_init__(self):
-        if self.n_approx_steps == -1:
-            self.diag_block_size = 2
+        # if self.n_approx_steps == -1:
+        #     self.diag_block_size = 2
 
         if self.dt_rank is None:
             self.dt_rank = self.diag_block_size
 
         self.n_head = self.n_embd // self.head_dim
         self.n_diag_blocks = self.head_dim // self.diag_block_size
+
+        if self.ego2allo:
+            self.shared_inner_theta = False
+
+        if not self.ego2allo:
+            self.rotate_values = False
         
         if self.freq_init_uniform:
             assert self.block_max_init > self.block_min_init
             self.step_block = (
                 -(self.block_max_init - self.block_min_init) / self.n_diag_blocks
             )
-
-
-def log_normal_arange(k, max_freq: float, device="cpu") -> torch.Tensor:
-    """
-    Deterministic log-skewed arange of k frequencies between 0 and 2π,
-    denser near 2π.
-    """
-    # Uniform grid in [0,1]
-    u = torch.linspace(1/k, 1+1/k, steps=k, device=device)
-
-    # Map through log transform to skew density
-    # Add epsilon to avoid log(0)
-    eps = 1e-9
-    skewed = torch.log(u + eps)
-    # print(skewed)
-    # Normalize to [0, 2π]
-    skewed = (skewed - skewed.min()) / (skewed.max() - skewed.min())
-    # print(skewed)
-    freqs = max_freq * skewed
-
-    # Flip so that density is higher near 2π
-    # freqs = max_freq - freqs
-
-    return freqs
 
 
 def blocks_to_repeat(num_blocks: int, dt_rank: int) -> List[int]:
@@ -165,11 +163,18 @@ def blocks_to_repeat(num_blocks: int, dt_rank: int) -> List[int]:
 
 def init_rotation_matrix(
     config: TransformerConfig,
+    layer_index: Optional[int] = None,
+    base_pow: int = 1,
     base_freq: Optional[int] = None,
+    follow_rank: Optional[bool] = None,
+    hiera: bool = False,
+    config_blocks: Optional[int] = None
 ) -> Tuple[torch.Tensor]:
+    if config_blocks is None:
+        config_blocks = config.n_diag_blocks
     # TODO change init for higher dimension
     S = torch.zeros(
-        config.n_diag_blocks,
+        config_blocks,
         config.diag_block_size,
         config.diag_block_size,
         dtype=torch.float32,
@@ -181,29 +186,32 @@ def init_rotation_matrix(
             config.block_max_init, config.block_min_init, step=config.step_block
         )
     else:
-        base_freq = config.base_freq
-        # if config.block_layer_scaling_ratio > 0:
-        #     s = 2 ** (1 / config.block_layer_scaling_ratio)
-        #     base_freq = base_freq / (s**layer_index)
-        # else:
-        #     base_freq = base_freq**base_pow
+        if base_freq is None:
+            base_freq = config.base_freq if not hiera else config.base_freq_h
+        if follow_rank is None:
+            follow_rank = config.follow_rank
 
         if not config.follow_rank:
             freqs = config.block_max_init * (
-                (base_freq) ** (
+                (base_freq)
+                ** (
                     -(
-                        (torch.arange(1, 1 + config.n_diag_blocks) / config.n_diag_blocks)
+                        (
+                            torch.arange(1, 1 + config_blocks)
+                            / config_blocks
+                        )
                         ** config.freq_init_alpha
                     )
                 )
             )
         else:
-            nbs = blocks_to_repeat(config.n_diag_blocks, config.dt_rank)
+            nbs = blocks_to_repeat(config_blocks, config.dt_rank)
             freq_list = list()
             for n_diag_blocks in nbs:
                 # n_diag_blocks = config.n_diag_blocks // config.dt_rank
                 freqs = config.block_max_init * (
-                    (base_freq) ** (
+                    (base_freq)
+                    ** (
                         -(
                             (torch.arange(1, 1 + n_diag_blocks) / n_diag_blocks)
                             ** config.freq_init_alpha
@@ -211,53 +219,11 @@ def init_rotation_matrix(
                     )
                 )
                 freq_list.append(freqs)
-            
+
             freqs = torch.concat(freq_list, dim=0)
 
     S = S * freqs.unsqueeze(-1).unsqueeze(-1)
     return S, freqs
-
-
-def init_two_linear_for_gain(L: int, lin1: nn.Linear, lin2: nn.Linear):
-    in_features = lin1.in_features
-    hidden = lin1.out_features
-    assert lin2.in_features == hidden, "Layers must connect"
-
-    # symmetric split: g1 = g2 = sqrt(L)
-    s1 = (L / in_features) ** 0.5
-    s2 = (L / hidden) ** 0.5
-
-    with torch.no_grad():
-        nn.init.normal_(lin1.weight, mean=0.0, std=s1)
-        nn.init.normal_(lin2.weight, mean=0.0, std=s2)
-        if lin1.bias is not None:
-            lin1.bias.zero_()
-        if lin2.bias is not None:
-            lin2.bias.zero_()
-
-
-def naive_cum_sum(a: torch.Tensor) -> torch.Tensor:
-    """
-    a: shape (b, l, d)
-    returns M: shape (b, l, l, d)
-      M[:, i, j, :] = sum_{k=i+1..j} a[:, k, :] if j > i
-                     = 0 otherwise
-    """
-    l = a.shape[1]
-    # prefix sums along l
-    S = torch.cumsum(a, dim=1)  # [b, l, d]
-
-    # difference S[j] - S[i] using broadcasting
-    # expand to [b, l, l, d]
-    Sj = S.unsqueeze(1)  # [b, 1, l, d]
-    Si = S.unsqueeze(2)  # [b, l, 1, d]
-    M = Si - Sj
-
-    # Mask out j <= i
-    mask = torch.triu(torch.ones(l, l, device=a.device, dtype=torch.bool), diagonal=1).T
-    M = M * mask.view(1, l, l, *(1 for _ in range(len(M.shape[3:]))))
-
-    return M
 
 
 class CoPE(nn.Module):
@@ -318,7 +284,6 @@ class ExponentialCoPE(nn.Module):
         pos = gates.flip(-1).cumsum(dim=-1).flip(-1)
         A = -torch.exp(self.A_log.float())
         cope = torch.exp(A * pos)
-        print(cope[0, 0])
         return cope
 
 
@@ -351,6 +316,33 @@ class LayerNorm(nn.Module):
         return F.layer_norm(input, self.weight.shape, self.weight, self.bias, 1e-5)
 
 
+class HouseHolderAttention(nn.Module):
+    def __init__(self, config: TransformerConfig):
+        super().__init__()
+        from fla.layers.path_attn import PaTHAttention
+        from fla.layers.gated_deltaproduct import GatedDeltaProduct
+
+        self.attn = GatedDeltaProduct(
+            hidden_size=config.n_embd,
+            num_heads=config.n_head,
+            head_dim=config.head_dim,
+            num_householder=config.num_householder,
+            use_forget_gate=False,
+            use_output_gate=False,
+            use_short_conv=False
+        )
+        # self.attn = PaTHAttention(hidden_size=config.n_embd, num_heads=config.n_head)
+
+    def forward(
+        self,
+        x: torch.Tensor,
+        padding_mask: Optional[torch.Tensor] = None,
+        temperature: Optional[float] = None,
+    ):
+        out, _, _ = self.attn(x)
+        return out, {}
+
+
 class Block(nn.Module):
 
     def __init__(
@@ -361,434 +353,37 @@ class Block(nn.Module):
         layer_index: Optional[float] = None,
     ):
         super().__init__()
-        self.ln_1 = LayerNorm(config.n_embd, bias=config.bias)
-        self.attn = attention_module(config, cope_module=cope_module, layer_index=layer_index)
-        self.ln_2 = LayerNorm(config.n_embd, bias=config.bias)
-        self.mlp = MLP(config)
+        self.config = config
+        self.ln_1 = LayerNorm(config.n_embd, bias=config.bias) if not config.diff_norms else nn.Identity()
+
+        if config.path_householder:
+            self.attn = HouseHolderAttention(config)
+        else:
+            self.attn = attention_module(
+                config, cope_module=cope_module, layer_index=layer_index
+            )
+        self.ln_2 = (
+            LayerNorm(config.n_embd, bias=config.bias)
+            if config.use_mlp
+            else nn.Identity()
+        )
+        self.mlp = MLP(config) if config.use_mlp else nn.Identity()
 
     def forward(
-        self, x: torch.Tensor, *path_integration_args, temperature: Optional[float]=None
+        self,
+        x: torch.Tensor,
+        *path_integration_args,
+        temperature: Optional[float] = None
     ) -> Tuple[torch.Tensor, Dict]:
-        x_att, out_dict = self.attn(self.ln_1(x), *path_integration_args, temperature=temperature)
+        x_att, out_dict = self.attn(
+            self.ln_1(x), *path_integration_args, temperature=temperature
+        )
         x = x + x_att
-        x = x + self.mlp(self.ln_2(x))
+        if self.config.use_mlp:
+            x = x + self.mlp(self.ln_2(x))
         return x, out_dict
 
 
-def pade_coeffs_sym(
-    k: int, device: torch.device = "cpu"
-) -> Tuple[torch.Tensor, torch.Tensor]:
-    """Compute Padé approximate for k = m
-    https://www.cis.upenn.edu/~cis6100/higham_matrix_exponential_siam_2004.pdf
-
-    Args:
-        k (int): Max coef
-
-    Returns:
-        _type_: P_kk and Q_kk coefs
-    """
-    m = k
-    # Initialize P_pq(x) and Q_pq(x) as zero tensors
-    P = [
-        math.factorial(k + m - j) / (math.factorial(j) * math.factorial(k - j))
-        for j in range(k)
-    ]
-    Q = [
-        (-1) ** (j)
-        * (math.factorial(k + m - j))
-        / (math.factorial(m - j) * math.factorial(j))
-        for j in range(m)
-    ]
-
-    return torch.tensor(P, device=device), torch.tensor(Q, device=device)
-
-
-class LearnableFreqs(nn.Module):
-    def __init__(self, freqs: torch.Tensor, ema_decay=0.98):
-        super().__init__()
-        
-        self.freqs = nn.Parameter(freqs.log())
-        self.freqs_ema = nn.Parameter(freqs.log(), requires_grad=False)
-        self.ema_decay = ema_decay
-
-    def forward(self, use_ema=True)->torch.Tensor:
-
-        log_f = (1-self.ema_decay) * self.freqs + (self.ema_decay * self.freqs_ema)
-        with torch.no_grad():
-            self.freqs_ema = log_f
-        f = torch.exp(log_f)
-        return f
-    
-
-class LearnableFreqs2(nn.Module):
-    def __init__(self, freqs: torch.Tensor, ema_decay=0.98):
-        super().__init__()
-        
-        self.freqs = nn.Parameter(freqs)
-        self.freqs_ema = nn.Parameter(freqs, requires_grad=False)
-        self.ema_decay = ema_decay
-
-    def forward(self, use_ema=True)->torch.Tensor:
-
-        f = (1-self.ema_decay) * self.freqs + (self.ema_decay * self.freqs_ema)
-        with torch.no_grad():
-            self.freqs_ema.values = f
-        f = torch.sqrt(f**2)
-        return f
-    
-
-class ThetaEmbedder(nn.Module):
-    def __init__(self, config: TransformerConfig):
-        super().__init__()
-
-        self.config = config
-        self.in_proj = nn.Linear(config.n_embd, config.dt_rank * config.n_head)
-        self.out_proj = nn.Linear(config.dt_rank, config.n_diag_blocks)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        b, l, _ = x.shape
-        theta_in = self.in_proj(x).view(b, l, self.config.n_head, -1)
-        theta_out = self.out_proj(theta_in)
-        return theta_out
-    
-
-class ThetaEmbedder2(nn.Module):
-    def __init__(self, config: TransformerConfig):
-        super().__init__()
-
-        self.config = config
-        self.in_proj = nn.Linear(config.n_embd, config.dt_rank * config.n_head)
-        # Parallel projection for all heads: weight shape (n_head, n_diag_blocks, dt_rank)
-        self.out_proj = nn.Parameter(
-            torch.empty(config.n_head, config.n_diag_blocks, config.dt_rank)
-        )
-        nn.init.normal_(self.out_proj, mean=0, std=0.02)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        b, l, _ = x.shape
-        # (b, l, n_head, dt_rank)
-        theta_in = self.in_proj(x).view(b, l, self.config.n_head, -1)
-        # einsum: parallel linear over all heads
-        # (b, l, n_head, dt_rank) x (n_head, n_diag_blocks, dt_rank) -> (b, l, n_head, n_diag_blocks)
-        theta_out = torch.einsum("blhd,hnd->blhn", theta_in, self.out_proj)
-        return theta_out
-
-
-class RotationModule(nn.Module):
-    def __init__(self, config: TransformerConfig, layer_index: Optional[int] = None):
-        super().__init__()
-
-        self.config = config
-
-        if config.shared_inner_theta:
-            self.theta_embedd = nn.Sequential(
-                nn.Linear(config.n_embd, config.dt_rank),
-                nn.Linear(config.dt_rank, config.n_head * config.n_diag_blocks, bias=False),
-            )
-        else:
-            self.theta_embedd = ThetaEmbedder2(config)
-        
-        self.theta_act = nn.Tanh()
-        # self.theta_act = (
-        #     # DyT(
-        #     #     dim=config.n_diag_blocks,
-        #     #     alpha=config.tanh_alpha,
-        #     #     requires_grad=True,
-        #     # )
-        #     nn.Tanh()
-        #     if config.tanh_alpha > 0
-        #     else nn.Identity()
-        # )
-
-        if config.init_same_head:
-            S, freqs = init_rotation_matrix(config)
-            if config.log_freq:
-                freqs = freqs.log()
-
-            if config.n_approx_steps >= 0:
-                self.S = nn.Parameter(S)
-            else:
-                # (b, l, nh, nb, 1)
-                self.freqs = nn.Parameter(
-                    freqs.squeeze(-1).unsqueeze(0).unsqueeze(0).unsqueeze(0)
-                )
-        else:
-            head_freqs = list()
-            # base_freqs = [config.base_freq / (2**i) for i in range(config.n_head)]
-            base_freqs = torch.logspace(
-                torch.log2(torch.tensor(config.min_base_freq)),
-                torch.log2(torch.tensor(config.base_freq)),
-                steps=config.n_head,
-                base=2,
-            )
-            for h in range(self.config.n_head):
-                S, freqs = init_rotation_matrix(
-                    config, layer_index=layer_index, base_pow=1, base_freq=base_freqs[h]
-                )
-                head_freqs.append(freqs)
-            freqs = torch.stack(head_freqs, dim=0)
-            if config.log_freq:
-                freqs = freqs.log()
-            self.freqs = nn.Parameter(freqs.squeeze(-1).unsqueeze(0).unsqueeze(0), requires_grad=config.freq_grad)
-
-        self.matrix_powers = None
-        self.approx_coeffs = None
-
-    def compute_mat_expension_coeffs(self):
-        device = self.S.device
-        if self.config.approx_method == "taylor":
-            power = torch.arange(1, self.config.n_approx_steps, device=device)
-            factorials = torch.cumprod(power, dim=0)
-            factorials = torch.cat([torch.ones(1, device=device), factorials])
-            self.approx_coeffs = factorials
-
-        elif self.config.approx_method == "pade":
-            self.approx_coeffs = pade_coeffs_sym(self.config.n_approx_steps, device)
-
-    def compute_matrix_powers(self):
-
-        device = self.S.device
-
-        # store matrix powers
-        # To keep A skew symetric, we force it to be equal to A - A.T
-        S = self.S - self.S.transpose(-1, -2)
-
-        accumulation = (
-            torch.eye(self.config.diag_block_size, device=device)
-            .unsqueeze(0)
-            .repeat(self.config.n_diag_blocks, 1, 1)
-        )
-        matrix_powers = torch.zeros(
-            self.config.n_approx_steps, *S.size(), dtype=S.dtype, device=device
-        )
-        matrix_powers[0] = accumulation
-        for i in range(1, self.config.n_approx_steps):
-            accumulation = S @ accumulation
-            matrix_powers[i] = accumulation
-
-        self.matrix_powers = matrix_powers  # n_approx_steps, nb, b, b
-
-    def compute_taylor_powers(self, theta: torch.Tensor) -> torch.Tensor:
-        """Returns [v**0, v**1, ..., v**self.n_taylor_steps-1)] in parallel
-        before combining it with A (self.matrix powers) to approximate mat_exp(v*A)
-
-        Args:
-            v (torch.Tensor): (b, l, d) velocity input
-
-        Returns:
-            torch.Tensor: powers of v up to self.n_taylor_steps-1 (b, l, d, k)
-        """
-        device = self.matrix_powers.device
-        powers = torch.arange(
-            0, self.config.n_approx_steps, device=device
-        ).float()  # shape (k,)
-
-        # 1. Compute powers of abs(x)
-        abs_theta_log = torch.log(theta.abs() + 1e-6).unsqueeze(
-            -2
-        )  # shape (b, l, d, 1)
-        abs_theta_powers = torch.exp(
-            abs_theta_log * powers.view(1, 1, self.config.n_approx_steps, 1)
-        )  # (b, l, d, k)
-
-        # 2. Get sign flip mask: True where x < 0 and p is odd
-        theta_neg = (theta < 0).unsqueeze(-2)  # shape (b, l, d, k)
-        odd_mask = (powers % 2 == 1).view(
-            1, 1, 1, self.config.n_approx_steps, 1
-        )  # shape (1, 1, 1, k)
-        sign = torch.where(theta_neg & odd_mask, -1.0, 1.0)  # shape (b, l, d, k)
-        # Odd powers do not change the sign
-        return abs_theta_powers * sign  # shape (b, n, d, k)
-
-    def compute_scale(self, theta: torch.Tensor):
-        """_summary_
-
-        Args:
-            v (torch.Tensor): (b, l, d)
-
-        Returns:
-            int: max_scale
-        """
-        S = self.S.clamp(0, 2 * math.pi)
-        S = S - S.transpose(-1, -2)
-        # S = self.S - self.S.transpose(-1, -2)
-        thetaS = S.view(1, 1, 1, *S.size()) * theta.view(*theta.size(), 1, 1)
-        norms = torch.linalg.norm(thetaS, dim=(-2, -1))
-
-        # Determine the scaling factor s
-        s = torch.ceil(torch.log2(norms)).int()
-        s = torch.where(s > 0, s, 1)
-        max_s = torch.max(s)
-
-        return max_s
-
-    def bind_power_matrices(
-        self, theta: torch.Tensor, max_scale: torch.Tensor
-    ) -> torch.Tensor:
-
-        theta_powers_signed = self.compute_taylor_powers(theta / (2**max_scale))
-        theta_powers_signed = theta_powers_signed.view(
-            *theta_powers_signed.size(), 1, 1
-        )
-        if self.config.approx_method == "taylor":
-            # compute [(v/2**scale)**k for k in range(self.n_steps)]
-            # scale by factorial
-            matrix_powers = self.matrix_powers / self.approx_coeffs.view(
-                self.config.n_approx_steps, 1, 1, 1
-            )  # (n_steps, nb, b, b)
-            matrix_powers = matrix_powers.view(
-                1, 1, 1, *matrix_powers.size()
-            )  # (1, 1, 1, k, nh, h, h)
-            mat_exp = (matrix_powers * theta_powers_signed).sum(dim=3)
-
-        elif self.config.approx_method == "pade":
-            P, Q = self.approx_coeffs
-            P = P.unsqueeze(0).unsqueeze(0).unsqueeze(-1).unsqueeze(-1).unsqueeze(-1)
-            Q = Q.unsqueeze(0).unsqueeze(0).unsqueeze(-1).unsqueeze(-1).unsqueeze(-1)
-            mat_pows = self.matrix_powers.unsqueeze(0).unsqueeze(0)
-            mat_exp = (P * mat_pows).sum(dim=2) / (Q * mat_pows).sum(dim=2)
-
-        return mat_exp
-
-    def approximate_exp(self, theta: torch.Tensor) -> torch.Tensor:
-        """_summary_
-
-        Args:
-            v (torch.Tensor): b, l, d
-
-        Returns:
-            torch.Tensor: (b, l, d, nh, h, h)
-        """
-
-        if self.matrix_powers is None or self.training:
-            self.compute_matrix_powers()
-        if self.approx_coeffs is None:
-            self.compute_mat_expension_coeffs()
-
-        # scale matrix for numerical stability when v is too big
-        max_scale = self.compute_scale(theta)
-
-        # approximate matrix
-        mat_exp = self.bind_power_matrices(theta, max_scale)
-        # unscale matrix
-        t0 = time.time()
-        for _ in range(max_scale):
-            mat_exp = mat_exp @ mat_exp
-
-        return mat_exp, {"max_scale": max_scale, "mat_pow": time.time() - t0}
-
-    def forward_torch_exp(self, theta: torch.Tensor) -> torch.Tensor:
-
-        # S = self.S - torch.diag_embed(torch.diagonal(self.S, dim1=-2, dim2=-1))
-        S = self.S - self.S.transpose(-1, -2)
-        thetaS = torch.matrix_exp(
-            S.view(1, 1, 1, *S.size()) * theta.view(*theta.size(), 1, 1)
-        )
-        return thetaS, {}
-
-    def forward_sins(self, theta: torch.Tensor):
-        if not self.config.log_freq:
-            freqs = torch.sqrt(self.freqs**2)
-        else:
-            freqs = torch.exp(self.freqs)
-        theta = theta * freqs
-        cos = torch.cos(theta)
-        sin = torch.sin(theta)
-        M = (cos, sin)
-        return M, {
-            # "tanh_alpha": self.theta_embedd[-1].alpha.detach().cpu().item(),
-            # "tanh_alpha": self.theta_act.alpha.detach().cpu().item(),
-            # "tanh_gamma": self.theta_act.gamma.detach().cpu().item(),
-            # "tanh_gamma": self.theta_act..detach().cpu().item(),
-            # "max_freq": freqs.detach().max().item(),
-            # "min_freq": freqs.detach().min().item(),
-            # "mean_freq": freqs.detach().mean().item(),
-            # "var_freq": freqs.detach().var().item(),
-        }
-    
-    def rotate_qk(
-        self, rot_matrix: torch.Tensor, q: torch.Tensor, k: Optional[torch.Tensor] = None
-        # self, theta: torch.Tensor, q: torch.Tensor, k: torch.Tensor
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
-        """Rotate queries and keys by an angle of theta, using exponential of matrix S
-
-        Args:
-            rot_matrix (torch.Tensor): Either a true rotation matrix or cos/sin for explicit formulation as in RoPE
-            q (torch.Tensor): (b, l, nh, h)
-            k (torch.Tensor): (b, l, nh, h)
-
-        Returns:
-            Tuple[torch.Tensor, torch.Tensor]: _description_
-        """
-        b, l, nh, _ = q.shape
-        q = q.view(b, l, nh, self.config.n_diag_blocks, self.config.diag_block_size)
-        if k is not None:
-            k = k.view(b, l, nh, self.config.n_diag_blocks, self.config.diag_block_size)
-
-        if self.config.n_approx_steps == -1:
-            cos = rot_matrix[0].unsqueeze(-1)
-            sin = rot_matrix[1].unsqueeze(-1)
-
-            def fast_rotate(x: torch.Tensor) -> torch.Tensor:
-                x1 = x[..., 0::2]
-                x2 = x[..., 1::2]
-                x_rotated_even = x1 * cos - x2 * sin
-                x_rotated_odd  = x1 * sin + x2 * cos
-                x = torch.stack((x_rotated_even, x_rotated_odd), dim=-1).flatten(-2).view(b, l, nh, -1)
-                return x
-            
-            q = fast_rotate(q)
-            if k is not None:
-                k = fast_rotate(k)
-        else:
-            q = torch.einsum("blhnij,blhnj->blhni", rot_matrix, q).view(b, l, nh, -1)
-            if k is not None:
-                k = torch.einsum("blhnij,blhnj->blhni", rot_matrix, k).view(b, l, nh, -1)
-
-        return q, k
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """
-        Computes W_v = mat_exp(sum_h v_h * A_h)
-        returns x = W_v*x
-
-        Args:
-            x (torch.Tensor): Embedding to transform (b, n, dim_embd) or (b, dim_embd) or (b, ..., n_head, h)
-            v (torch.Tensor): Velocity to guide transformation (b, n, dim_v_hidden) or (b, dim_v_hidden)
-
-        Returns:
-            torch.Tensor: x multiplied by mat_exp(delta*A) (b, n, dim_embd) or (b, dim_embd)
-        """
-        t0 = time.time()
-        b, l, _ = x.shape
-        if self.config.shared_inner_theta:
-            theta = self.theta_embedd(x).view(b, l, self.config.n_head, -1)  # b, l, nh, nb
-        else:
-            theta = self.theta_embedd(x)
-        # theta_norm = theta.norm(p=1, dim=-1).mean().item()
-        # theta_var = theta.var(dim=-1).mean().item()
-
-        theta = self.theta_act(theta)
-        # theta_min = theta.abs().min().item()
-        # theta_max = theta.abs().max().item()
-        thetac = theta.cumsum(dim=1)  # b, l, nh, nb
-        # thetac_min = thetac.abs().min().item()
-        # thetac_max = thetac.abs().max().item()
-
-        # TODO make sure that method stays stable for large number of steps
-        if self.config.n_approx_steps > 0:
-            mat_exp, rot_dict = self.approximate_exp(thetac)
-            rot_dict["full_rotcreation"] = time.time() - t0
-        if self.config.n_approx_steps == -1:
-            mat_exp, rot_dict = self.forward_sins(thetac)
-        else:
-            mat_exp, rot_dict = self.forward_torch_exp(thetac)
-        # rot_dict["theta_norm"] = theta_norm
-        # rot_dict["theta_var"] = theta_var
-        # rot_dict["theta_min"] = theta_min
-        # rot_dict["theta_max"] = theta_max
-        # rot_dict["theta_mean"] = theta.abs().mean().item()
-        # rot_dict["theta_min_cumsum"] = thetac_min
-        # rot_dict["theta_max_cumsum"] = thetac_max
-        # rot_dict["theta_mean_cumsum"] =  thetac.abs().mean().item()
-        return mat_exp, thetac, theta, rot_dict
+def compute_lreg(g: torch.Tensor) -> torch.Tensor:
+    return (g.abs()).sum(dim=-1)
+    # return (g**2).sum(dim=tuple(range(2, g.ndim)))

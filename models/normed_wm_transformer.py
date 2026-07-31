@@ -6,7 +6,8 @@ import torch.nn as nn
 from typing import Optional, Tuple
 from rotary_embedding_torch import RotaryEmbedding
 
-from models.transformer_utils import TransformerConfig, RotationModule
+from models.transformer_utils import TransformerConfig
+from models.rotation_module import RotationModule
 
 
 def just_norm(x: torch.Tensor) -> torch.Tensor:

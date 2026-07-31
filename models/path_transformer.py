@@ -7,15 +7,14 @@ from typing import *
 from dataclasses import dataclass
 
 from models.transformer_utils import (
-    init_two_linear_for_gain,
     TransformerConfig,
     Block,
     LayerNorm,
-    RotationModule,
     CoPE,
     ExponentialCoPE,
     init_rotation_matrix,
 )
+from models.rotation_module import RotationModule
 
 
 @dataclass

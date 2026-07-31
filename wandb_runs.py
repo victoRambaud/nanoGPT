@@ -7,6 +7,8 @@ from tqdm import tqdm
 import torch
 
 from typing import List, Dict, Tuple, Optional
+import matplotlib.ticker as mtick
+from matplotlib.ticker import MaxNLocator
 
 
 class WandbRun:
@@ -100,11 +102,11 @@ def plot_sns_figure(
     y_values: List[str],
     y_name: str,
     fig_title: str,
-    key_metric: str = "MLP",
+    key_metric: str = "Model Type",
     save_fig: bool = False,
     plt_params: Dict = {},
     loc_legend: str = "lower right",
-    figsize: Tuple[float] = (6.0, 4.0),
+    figsize: Tuple[float] = (8.0, 5.0),
 ) -> None:
     sns.set_theme(style="whitegrid", context="paper", font_scale=2)
     plt.rcParams.update(
@@ -127,10 +129,10 @@ def plot_sns_figure(
     )
     data = list()
     for i, model in enumerate(model_names):
-
+        print(len(y_values[i]))
         df_run = pd.DataFrame(
             {
-                x_name: x_values,
+                x_name: x_values[i],
                 y_name: y_values[i],
                 "Model": model,
                 key_metric: key_metrics[i]
@@ -138,9 +140,7 @@ def plot_sns_figure(
             }
         )
         data.append(df_run)
-
     df_history = pd.concat(data)
-
     fig, ax = plt.subplots()
 
     # Use hue for Model, and style for Metric Type
@@ -150,22 +150,32 @@ def plot_sns_figure(
         y=y_name,
         hue="Model",
         color="color",
-        # style=key_metric,  # Use dashed/solid lines for train vs val
+        style=key_metric,  # Use dashed/solid lines for train vs val
         # style=style_key,  # Use dashed/solid lines for train vs val
         #     errorbar='sd',
         ax=ax,
-        markers=True,
-        dashes=True,
+        markers=False,
+        dashes=False,
         linewidth=2,
         markersize=10,
     )
-    x_min = df_history[x_name].min()
-    x_max = df_history[x_name].max()
-    n_ticks = 5 
-    tick_positions = np.linspace(0, x_max-x_min, n_ticks)
 
-    # 3. Force the axis to use these positions
-    ax.set_xticks(tick_positions)
+    # x_min = int(df_history[x_name].min())
+    # x_max = int(df_history[x_name].max())
+    # n_ticks = 5 
+    # tick_positions = np.linspace(0, x_max-x_min, n_ticks, dtype=np.int32)
+
+    # # 3. Force the axis to use these positions
+    # ax.xaxis.set_major_formatter(mtick.StrMethodFormatter('{x:.2f}'))
+    # ax.set_xticks(tick_positions)
+
+    formatter = mtick.ScalarFormatter(useMathText=True)
+    formatter.set_scientific(True)
+    formatter.set_powerlimits((-1, 1)) # Forces scientific notation for numbers outside [0.1, 10]
+    ax.xaxis.set_major_formatter(formatter)
+
+    # 2. Set the number of ticks if it's still too crowded
+    ax.xaxis.set_major_locator(MaxNLocator(nbins=6))
 
     ax.tick_params(
         axis="both",
@@ -193,9 +203,18 @@ def plot_sns_figure(
     plt.ylabel(y_name)
 
     handles, labels = ax.get_legend_handles_labels()
-    handles = handles[1 : 1 + len(key_metrics)]
-    labels = labels[1 : 1 + len(key_metrics)]
+    l = len(np.unique(key_metrics))
+    handles = handles[1 : l+1]
+    labels = labels[1 : l+1]
+    # labels = labels[1 : 1 + len(key_metrics)]
+    # plt.legend(labels, title="", loc=loc_legend, frameon=True)
     plt.legend(handles, labels, title="", loc=loc_legend, frameon=True)
+    ax.set_title(
+        fig_title,
+        fontsize=14,
+        fontweight="bold",
+        pad=12
+    )
 
     if save_fig:
         fig.savefig(fig_title, bbox_inches="tight", dpi=300, format="pdf")
