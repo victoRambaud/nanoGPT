@@ -45,7 +45,7 @@ block_max_init: float = 1.0
 
 # egoformer
 commute = True
-rotate_values = True
+rotate_values = False
 ego2allo = True
 single_freq = True
 gate_algebra = True
@@ -56,7 +56,10 @@ attention_type = "normal"
 if init_from == "scratch":
     if transformer_type == "WM":
         if ego2allo:
-            wandb_run_name = f"EGO_rank{dt_rank}"
+            wandb_run_name = "EGO"
+            if rotate_values:
+                wandb_run_name += "_ROTVAL"
+            wandb_run_name += f"_rank{dt_rank}"
         else:
             wandb_run_name = f"WM_L{n_layer}_n{n_embd}_base{base_freq}_rank{dt_rank}"
     # elif transformer_type == "EM":
