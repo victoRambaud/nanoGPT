@@ -209,6 +209,7 @@ class CausalSelfAttention(nn.Module):
         else:
             L = T
 
+        rot_dict_kv, rot_dict_q = dict(), dict()
         # calculate query, key, values for all heads in batch and move head forward to be the batch dim
         q, k, v = self.qkv_forward(x, q_x)
         k = k.view(B, T, self.n_head, C // self.n_head)
