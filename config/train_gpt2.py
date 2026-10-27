@@ -4,8 +4,8 @@
 
 out_dir = "out"
 wandb_run_name = ""
-ckpt_name = ""
 ckpt_path = ""
+ckpt_name = ""
 eval_interval = 2000
 log_interval = 1
 eval_iters = 200
