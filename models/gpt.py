@@ -7,9 +7,8 @@ import torch.nn.functional as F
 
 from typing import Optional, Tuple
 
-from models.transformer_utils import LayerNorm, TransformerConfig
+from models.transformer_utils import LayerNorm, TransformerConfig, Norm
 from models.transformer import Transformer
-from models.path_transformer import EMTransformer
 from models.normed_em_transformer import nEMTransformer
 from models.em_wm_transformer import EMWMTransformer
 from models.normed_wm_transformer import nWMTransformer
@@ -34,12 +33,12 @@ class GPT(nn.Module):
             self.transformer = nWMTransformer(config)
         elif config.transformer_type == "EMWM":
             self.transformer = EMWMTransformer(config)
-        elif config.transformer_type == "EM":
-            self.transformer = EMTransformer(config)
-        else:
+        # elif config.transformer_type == "EM":
+        #     self.transformer = EMTransformer(config)
+        # else:
             raise NotImplementedError
         
-        self.ln_f = LayerNorm(config.n_embd, bias=config.bias)
+        self.ln_f = Norm(config)
         self.lm_head = nn.Linear(config.n_embd, config.vocab_size, bias=False)
         # with weight tying when using torch.compile() some warnings get generated:
         # "UserWarning: functional_call was passed multiple values for tied weights.

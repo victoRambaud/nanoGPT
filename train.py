@@ -75,41 +75,42 @@ if __name__ == "__main__":
     episodic_memory: bool = False
     n_episodic_memory: bool = False
     n_working_memory: bool = False
-    inv_scale_attn: bool = False
-    em_qk_positions: bool = True
-    follow_rank: bool = False
-    init_same_head: bool = True
+    follow_rank: bool = True
     shared_inner_theta: bool = False
     transformer_type = "WM"
-    em_wm: bool = False
-    n_approx_steps: int = -1
     dt_rank: int = 2
     base_freq = 10000
     block_max_init: float = 1.0
-    block_layer_scaling_ratio: float = 0.
-    log_freq: bool = False
-    freq_grad: bool = False
 
     # egoformer
-    commute = True,
-    rotate_values = False,
+    commute = True
+    rotate_values = False
     ego2allo = False
     value_base_freq = 10
+    single_freq = True
+    gate_algebra = True
+    freq_grad = False
+    attention_type = "normal"
 
     # run name
     if init_from == "scratch":
-        if transformer_type == "WM":
-            wandb_run_name = f"WM_L{n_layer}_n{n_embd}_base{base_freq}_rank{dt_rank}_log_freq{log_freq}"
-        elif transformer_type == "EM":
-            wandb_run_name = f"EM_L{n_layer}_n{n_embd}_base{base_freq}_rank{dt_rank}_ls{block_layer_scaling_ratio}"
-        elif transformer_type == "nEMWM":
-            wandb_run_name = f"nEMWM_invscale_{inv_scale_attn}_L{n_layer}_n{n_embd}_base{base_freq}_rank{dt_rank}_ls{block_layer_scaling_ratio}"
-        elif transformer_type == "nWM" and not rope:
-            wandb_run_name = f"nWM_invscale_{inv_scale_attn}_L{n_layer}_n{n_embd}_base{base_freq}_rank{dt_rank}_ls{block_layer_scaling_ratio}"
-        elif transformer_type == "nWM" and rope:
-            wandb_run_name = f"nROPE_invscale_{inv_scale_attn}_L{n_layer}_n{n_embd}_base{base_freq}_rank{dt_rank}_ls{block_layer_scaling_ratio}"
-        elif transformer_type == "nEM":
-            wandb_run_name = f"nEM_invscale_{inv_scale_attn}_qkpos{em_qk_positions}_L{n_layer}_n{n_embd}_base{base_freq}_rank{dt_rank}_ls{block_layer_scaling_ratio}"
+        if transformer_type == "WM" and not rope:
+            if ego2allo:
+                prefix = "EGO"
+            else:
+                prefix = ""
+            prefix += "_WM" if attention_type == "normal" else "_EM"
+            wandb_run_name = f"{prefix}_L{n_layer}_n{n_embd}_base{base_freq}_rank{dt_rank}"
+        # elif transformer_type == "EM":
+        #     wandb_run_name = f"EM_L{n_layer}_n{n_embd}_base{base_freq}_rank{dt_rank}_ls{block_layer_scaling_ratio}"
+        # elif transformer_type == "nEMWM":
+        #     wandb_run_name = f"nEMWM_invscale_{inv_scale_attn}_L{n_layer}_n{n_embd}_base{base_freq}_rank{dt_rank}_ls{block_layer_scaling_ratio}"
+        # elif transformer_type == "nWM" and not rope:
+        #     wandb_run_name = f"nWM_invscale_{inv_scale_attn}_L{n_layer}_n{n_embd}_base{base_freq}_rank{dt_rank}_ls{block_layer_scaling_ratio}"
+        # elif transformer_type == "nWM" and rope:
+        #     wandb_run_name = f"nROPE_invscale_{inv_scale_attn}_L{n_layer}_n{n_embd}_base{base_freq}_rank{dt_rank}_ls{block_layer_scaling_ratio}"
+        # elif transformer_type == "nEM":
+        #     wandb_run_name = f"nEM_invscale_{inv_scale_attn}_qkpos{em_qk_positions}_L{n_layer}_n{n_embd}_base{base_freq}_rank{dt_rank}_ls{block_layer_scaling_ratio}"
         elif cope:
             wandb_run_name = f"COPE_L{n_layer}_n{n_embd}"
             transformer_type = "WM"
@@ -256,31 +257,30 @@ if __name__ == "__main__":
         head_dim=head_dim,
         n_embd=n_embd,
         block_size=block_size,
-        inv_scale_attn=inv_scale_attn,
-        em_qk_positions=em_qk_positions,
+        # inv_scale_attn=inv_scale_attn,
+        # em_qk_positions=em_qk_positions,
         bias=bias,
         vocab_size=None,
         dropout=dropout,
         rope=rope,
         cope=cope,
         working_memory=working_memory,
-        n_approx_steps=n_approx_steps,
         dt_rank=dt_rank,
         base_freq=base_freq,
         block_max_init=block_max_init,
-        block_layer_scaling_ratio=block_layer_scaling_ratio,
-        log_freq=log_freq,
         follow_rank=follow_rank,
-        init_same_head=init_same_head,
         shared_inner_theta=shared_inner_theta,
-        freq_grad=freq_grad,
 
         # egoformer
         diag_block_size=dt_rank,
         commute=commute,
         rotate_values=rotate_values,
         ego2allo=ego2allo,
-        value_base_freq=value_base_freq
+        value_base_freq=value_base_freq,
+        single_freq=single_freq,
+        gate_algebra=gate_algebra,
+        freq_grad=freq_grad,
+        attention_type=attention_type
     )  # start with model_args from command line
 
     if init_from == "scratch":

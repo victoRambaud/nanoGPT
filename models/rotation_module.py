@@ -3,10 +3,29 @@ import math
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 from typing import *
 from models.transformer_utils import TransformerConfig, init_rotation_matrix
 from models.non_commute_rotation_module import EgoNDimEmbedder
+from models.rotors.quaternion_rotor import QuaternionRotor, inv_quaternion
+from models.rotors.rotor2d import Rotor2D
+
+
+def se2_motion_regularization(
+    motion: torch.Tensor,
+    head_angle: torch.Tensor,
+) -> torch.Tensor:
+    # motion:     (b, l, h, 2)
+    # head_angle: (b, l, h)
+
+    translation = motion.pow(2).sum(dim=-1)  # (b, l, h)
+
+    rotation = 4.0 * (1.0 - torch.cos(head_angle))  # (b, l, h)
+
+    reg = translation + rotation  # (b, l, h)
+
+    return reg.sum(dim=-1).mean()
 
 
 def wrap_angle(a: torch.Tensor) -> torch.Tensor:
@@ -127,7 +146,10 @@ class RotationModule(nn.Module):
 
         if config.ego2allo:
             if self.config.dt_rank == 2:
-                self.theta_embedd = Ego2AlloEmbedder(config)
+                self.theta_embedd = Rotor2D(config)
+                # self.theta_embedd = Ego2AlloEmbedder(config)
+            elif self.config.dt_rank == 3:
+                self.theta_embedd = QuaternionRotor(config)
             else:
                 self.theta_embedd = EgoNDimEmbedder(config=config)
 
@@ -173,6 +195,13 @@ class RotationModule(nn.Module):
             freqs = torch.stack(head_freqs, dim=0)
             self.freqs = nn.Parameter(freqs.squeeze(-1).unsqueeze(0).unsqueeze(0).log())
 
+        if self.config.dt_rank == 2:
+            self.rotation_mode = "sin"
+        elif self.config.dt_rank == 3:
+            self.rotation_mode = "quat"
+        else:
+            self.rotation_mode = "mat"
+
     def forward_torch_exp(self, theta: torch.Tensor) -> torch.Tensor:
 
         S = self.S - self.S.transpose(-1, -2)
@@ -180,6 +209,18 @@ class RotationModule(nn.Module):
             S.view(1, 1, 1, *S.size()) * theta.view(*theta.size(), 1, 1)
         )
         return thetaS, {}
+
+    def mat_inverse(self, rot_dict: Dict):
+        if self.rotation_mode == "sin":
+            rot_inv = (rot_dict["value_rotation"][0], -rot_dict["value_rotation"][1])
+        elif self.rotation_mode == "quat":
+            rot_inv = inv_quaternion(rot_dict["value_rotation"])
+        else:
+            # inverse of a rotation matrix is its transpose since
+            # M = exp(S-S.T) => M^-1 = exp(-S+S.T) = exp((S-S.T).T) = M.T
+            rot_inv = rot_dict["value_rotation"].transpose(-2, -1)
+
+        return rot_inv
 
     def forward_sins(self, theta: torch.Tensor):
         # freqs = torch.sqrt(self.freqs**2)
@@ -213,7 +254,7 @@ class RotationModule(nn.Module):
         if k is not None:
             k = k.view(b, l, nh, self.config.n_diag_blocks, self.config.diag_block_size)
 
-        if mode == "sin":
+        if self.rotation_mode == "sin":
             cos = rot_matrix[0].unsqueeze(-1)
             sin = rot_matrix[1].unsqueeze(-1)
 
@@ -232,6 +273,10 @@ class RotationModule(nn.Module):
             q = fast_rotate(q)
             if k is not None:
                 k = fast_rotate(k)
+        elif self.rotation_mode == "quat":
+            q = self.theta_embedd.rotate_vector(rot_matrix, q).view(b, l, nh, -1)
+            if k is not None:
+                k = self.theta_embedd.rotate_vector(rot_matrix, k).view(b, l, nh, -1)
         else:
             q = torch.einsum("blhnij,blhnj->blhni", rot_matrix, q).view(b, l, nh, -1)
             if k is not None:
@@ -270,114 +315,61 @@ class RotationModule(nn.Module):
 
         # TODO make sure that method stays stable for large number of steps
         if self.config.n_approx_steps > 0:
-            mat_exp, rot_dict = self.approximate_exp(thetac)
+            rot_matrix, rot_dict = self.approximate_exp(thetac)
             rot_dict["full_rotcreation"] = time.time() - t0
         if self.config.n_approx_steps == -1:
-            mat_exp, rot_dict = self.forward_sins(thetac)
+            rot_matrix, rot_dict = self.forward_sins(thetac)
         else:
-            mat_exp, rot_dict = self.forward_torch_exp(thetac)
+            rot_matrix, rot_dict = self.forward_torch_exp(thetac)
         
         rot_dict = {**rot_dict, **theta_dict}
-        if not self.training and self.config.shared_inner_theta:
-            rot_dict["theta_in"] = self.theta_embedd[0](x)
-        return mat_exp, thetac, theta, rot_dict
+        rot_dict["rot_matrix"] = rot_matrix
+        if not self.training:
+            rot_dict["theta"] = theta
+            rot_dict["thetac"] = thetac
+        return rot_matrix, thetac, theta, rot_dict
 
 
-class Ego2AlloEmbedder(nn.Module):
-    def __init__(self, config: TransformerConfig):
-        super().__init__()
-        self.config = config
-        self.rank = config.dt_rank
-        self.n_angles = self.rank * (self.rank - 1) // 2
-        self.angular_embed = nn.Linear(
-            config.n_embd, config.n_head * (self.n_angles), bias=False
-        )
-        # self.angle_scale = nn.Parameter(torch.tensor(float(config.angle_scale)), requires_grad=True)
-        self.angle_scale = nn.Linear(1, config.n_diag_blocks)
-        self.allocentric_velocity = nn.Linear(
-            config.n_embd, config.n_head * (self.rank), bias=False
-        )
-        self.out_proj = nn.Linear(self.rank, config.n_diag_blocks, bias=False)
+def decaying_frequencies(max_freq, dim, decay=0.5, device=None):
+    """
+    Allocate integer frequencies 0..max_freq with exponentially
+    decaying multiplicity.
 
-        if config.rotate_values:
-            _, value_freqs = init_rotation_matrix(config, base_freq=config.value_base_freq, follow_rank=False)
-            if config.single_freq:
-                self.value_freqs = nn.Parameter(
-                    torch.ones_like(value_freqs).squeeze(-1).unsqueeze(0).unsqueeze(0).unsqueeze(0).repeat(1, 1, config.n_head, 1),
-                    requires_grad=False
-                )
-            elif config.zero_freqs:
-                _, value_freqs = init_rotation_matrix(config, base_freq=config.value_base_freq, follow_rank=False, config_blocks=config.n_diag_blocks//2)
-                value_freqs = torch.concat([value_freqs, torch.zeros_like(value_freqs)])
-                self.value_freqs = nn.Parameter(
-                    value_freqs.squeeze(-1).unsqueeze(0).unsqueeze(0).unsqueeze(0).repeat(1, 1, config.n_head, 1).log(),
-                    requires_grad=True
-                )
-            else:
-                self.value_freqs = nn.Parameter(
-                    value_freqs.squeeze(-1).unsqueeze(0).unsqueeze(0).unsqueeze(0).repeat(1, 1, config.n_head, 1).log(),
-                    requires_grad=True
-                )
-            # self.value_angle_proj = nn.Linear(1, config.n_diag_blocks)
+    Args:
+        max_freq: maximum integer frequency
+        dim: total number of dimensions (must be even for k>0 blocks)
+        decay: exponential decay rate
 
-    def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor]:
-        b, l, d = x.size()
-        raw_angular_velocity = self.angular_embed(x).view(
-            b, l, self.config.n_head
-        )  # (b, l, n_head * 3)
-        # angular_velocity = self.angle_scale * raw_angular_velocity
-        angular_velocity = raw_angular_velocity
-        movement_magnitude = self.allocentric_velocity(x).view(
-            b, l, self.config.n_head, -1
-        )  # (b, l, n_head * 3)
-        
-        # velocities_norms = (4*((angular_velocity/2).sin()**2) + 0.0 * (movement_magnitude.norm(p=2, dim=-1)**2)).sum(dim=-1).mean(dim=1).mean()
-        # print(velocities_norms)
-        # velocities_norms = (2*(angular_velocity/2).sin().abs()).sum(dim=-1).mean(dim=1).mean()
-        velocities_norms = se2_twist_penalty(
-            v=movement_magnitude,
-            w=angular_velocity,
-            reduction=None,
-            mode="joint"
-        )
-        velocities_norms = velocities_norms.sum(dim=-1).mean()
-        
-        if self.config.full_ego_path:
-            head_angle = angular_velocity.cumsum(dim=1)  # (b, l, n_head)
-        else:
-            # TODO rotation by angular velocity probably needed after retrieval
-            head_angle = (
-                angular_velocity.cumsum(dim=1) - angular_velocity
-            )  # (b, l, n_head)
-        head_angle = head_angle % (2 * math.pi)
-        cos_theta = torch.cos(head_angle)  # (b, l, n_head)
-        sin_theta = torch.sin(head_angle)  # (b, l, n_head)
+    Returns:
+        freqs: tensor of frequencies for each 2D rotation block
+        counts: number of blocks per frequency
+    """
 
-        vx = movement_magnitude[..., 0]
-        vy = movement_magnitude[..., 1]
-        
-        vx_allo = vx * cos_theta - vy * sin_theta
-        vy_allo = vx * sin_theta + vy * cos_theta
+    device = device or "cpu"
 
-        allocentric_velocity = torch.stack(
-            [vx_allo, vy_allo], dim=-1
-        )  # (b, l, n_head, 2)
+    k = torch.arange(max_freq + 1, device=device)
 
-        allo_velocity = self.out_proj(allocentric_velocity)
+    # preference weights
+    weights = torch.exp(-decay * k)
 
-        value_rotation = None
-        if self.config.rotate_values:
-            if not self.config.full_ego_path:
-                head_angle = head_angle + angular_velocity
-            head_angle = self.angle_scale(head_angle.unsqueeze(-1))
-            cos_head = torch.cos( - self.value_freqs.exp() * head_angle)
-            sin_head = torch.sin( - self.value_freqs.exp() * head_angle)
-            # cos_head = torch.cos( - self.value_freqs.exp() * head_angle.unsqueeze(-1))
-            # sin_head = torch.sin( - self.value_freqs.exp() * head_angle.unsqueeze(-1))
-            value_rotation = (cos_head, sin_head)
-        return allo_velocity, {
-            "activity_norm": velocities_norms,
-            "value_rotation": value_rotation,
-            "max_angle": head_angle.abs().max().item(),
-            "min_angle": head_angle.abs().max().item(),
-        }
+    # number of 2D blocks available
+    n_blocks = dim // 2
+
+    # continuous allocation
+    raw = weights / weights.sum() * n_blocks
+
+    # integer allocation
+    counts = torch.floor(raw).long()
+
+    # distribute remaining blocks
+    remainder = n_blocks - counts.sum()
+    if remainder > 0:
+        frac = raw - counts.float()
+        idx = torch.argsort(frac, descending=True)[:remainder]
+        counts[idx] += 1
+
+    # avoid losing frequencies due to rounding
+    freqs = torch.repeat_interleave(k, counts)
+
+    return freqs, counts
+

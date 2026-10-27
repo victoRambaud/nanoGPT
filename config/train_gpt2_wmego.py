@@ -32,46 +32,43 @@ dropout = 0.0  # for pretraining 0 is good, for finetuning try 0.1+
 bias = False  # do we use bias inside LayerNorm and Linear layers?
 rope: bool = False
 cope: bool = False
-transformer_type: str = "WM"
-em_qk_positions: bool = False
 working_memory: bool = True
 episodic_memory: bool = False
 n_episodic_memory: bool = False
-inv_scale_attn: bool = False
+n_working_memory: bool = False
 follow_rank: bool = True
-init_same_head: bool = True
 shared_inner_theta: bool = False
-em_wm: bool = False
-n_approx_steps: int = -1
-dt_rank: int = 4
-base_freq = 4096
+transformer_type = "WM"
+dt_rank: int = 2
+base_freq = 10000
 block_max_init: float = 1.0
-block_layer_scaling_ratio: float = 0.
-log_freq: bool = True
-freq_grad: bool = False
 
-commute: bool = True,
-rotate_values: bool = True,
-ego2allo: bool = True
-value_base_freq: int = 15
+# egoformer
+commute = True
+rotate_values = True
+ego2allo = True
+single_freq = True
+gate_algebra = True
+freq_grad = False
+attention_type = "normal"
 
 # run name
 if init_from == "scratch":
     if transformer_type == "WM":
         if ego2allo:
-            wandb_run_name = f"EGO_rank{dt_rank}_valuefreq{value_base_freq}"
+            wandb_run_name = f"EGO_rank{dt_rank}"
         else:
             wandb_run_name = f"WM_L{n_layer}_n{n_embd}_base{base_freq}_rank{dt_rank}_ls{block_layer_scaling_ratio}_innerTH{shared_inner_theta}"
-    elif transformer_type == "EM":
-        wandb_run_name = f"EM_L{n_layer}_n{n_embd}_base{base_freq}_rank{dt_rank}_ls{block_layer_scaling_ratio}"
-    elif transformer_type == "nEMWM":
-        wandb_run_name = f"nEMWM_invscale_{inv_scale_attn}_L{n_layer}_n{n_embd}_base{base_freq}_rank{dt_rank}_ls{block_layer_scaling_ratio}"
-    elif transformer_type == "nWM" and not rope:
-        wandb_run_name = f"nWM_invscale_{inv_scale_attn}_L{n_layer}_n{n_embd}_base{base_freq}_rank{dt_rank}_ls{block_layer_scaling_ratio}"
-    elif transformer_type == "nWM" and rope:
-        wandb_run_name = f"nROPE_invscale_{inv_scale_attn}_L{n_layer}_n{n_embd}_base{base_freq}_rank{dt_rank}_ls{block_layer_scaling_ratio}"
-    elif transformer_type == "nEM":
-        wandb_run_name = f"nEM_invscale_{inv_scale_attn}_qkpos{em_qk_positions}_L{n_layer}_n{n_embd}_base{base_freq}_rank{dt_rank}_ls{block_layer_scaling_ratio}"
+    # elif transformer_type == "EM":
+    #     wandb_run_name = f"EM_L{n_layer}_n{n_embd}_base{base_freq}_rank{dt_rank}_ls{block_layer_scaling_ratio}"
+    # elif transformer_type == "nEMWM":
+    #     wandb_run_name = f"nEMWM_invscale_{inv_scale_attn}_L{n_layer}_n{n_embd}_base{base_freq}_rank{dt_rank}_ls{block_layer_scaling_ratio}"
+    # elif transformer_type == "nWM" and not rope:
+    #     wandb_run_name = f"nWM_invscale_{inv_scale_attn}_L{n_layer}_n{n_embd}_base{base_freq}_rank{dt_rank}_ls{block_layer_scaling_ratio}"
+    # elif transformer_type == "nWM" and rope:
+    #     wandb_run_name = f"nROPE_invscale_{inv_scale_attn}_L{n_layer}_n{n_embd}_base{base_freq}_rank{dt_rank}_ls{block_layer_scaling_ratio}"
+    # elif transformer_type == "nEM":
+    #     wandb_run_name = f"nEM_invscale_{inv_scale_attn}_qkpos{em_qk_positions}_L{n_layer}_n{n_embd}_base{base_freq}_rank{dt_rank}_ls{block_layer_scaling_ratio}"
     elif cope:
         wandb_run_name = f"COPE_L{n_layer}_n{n_embd}"
         transformer_type = "WM"

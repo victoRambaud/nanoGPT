@@ -9,238 +9,15 @@ import torch
 import torch.nn as nn
 from torch.nn import functional as F
 
-from rotary_embedding_torch import RotaryEmbedding
+from models.attentions import CausalSelfAttention, AbsoluteCausalSelfAttention
 
 from models.transformer_utils import (
     CoPE,
     TransformerConfig,
-    LayerNorm,
+    Norm,
     Block,
 )
 from typing import Optional
-from models.rotation_module import RotationModule
-        
-
-class CausalSelfAttention(nn.Module):
-
-    def __init__(self, config: TransformerConfig, cope_module: Optional[CoPE] = None, layer_index: Optional[float] = None):
-        super().__init__()
-        self.config = config
-
-        assert config.n_embd % config.n_head == 0
-        # key, query, value projections for all heads, but in a batch
-        self.c_attn = nn.Linear(config.n_embd, 3 * config.n_embd, bias=False)
-        self.temperature = config.temperature
-
-        self.att_ln = nn.Identity()
-        self.rot_ln = nn.Identity()
-        if config.diff_norms:
-            self.att_ln = LayerNorm(config.n_embd, bias=config.bias)
-            if config.working_memory:
-                self.rot_ln = LayerNorm(config.n_embd, bias=config.bias)
-
-        # if we share a projection for cope key and query we need to have
-        self.cope_shared_key_query = config.cope_shared_key_query
-        if self.cope_shared_key_query:
-            config.sep_key = True
-
-        self.cope_key = (
-            nn.Linear(config.n_embd, config.n_embd, bias=config.bias)
-            if config.cope and config.sep_key
-            else None
-        )
-        self.cope_queries = (
-            nn.Linear(config.n_embd, config.n_embd, bias=config.bias)
-            if config.cope and config.sep_query and not config.cope_shared_key_query
-            else None
-        )
-        # output projection
-        if config.attn_outproj:
-            self.c_proj = nn.Linear(config.n_embd, config.n_embd, bias=config.bias)
-            self.c_proj.weight = nn.Parameter(torch.linalg.inv(self.c_attn.weight.T[:, -config.n_embd:]).T)
-        else:
-            self.c_proj = nn.Identity()
-        # regularization
-        self.attn_dropout = nn.Dropout(config.dropout)
-        self.resid_dropout = nn.Dropout(config.dropout)
-        self.n_head = config.n_head
-
-        self.n_embd = config.n_embd
-        self.head_dim = self.n_embd // self.n_head
-        self.n_embd = config.n_embd
-        self.dropout = config.dropout
-
-        if cope_module is not None:
-            print("Single CoPE module for whole Transformer")
-            self.cope = cope_module
-        else:
-            self.cope = (
-                CoPE(
-                    npos_max=config.cope_npos_max,
-                    head_dim=self.head_dim,
-                    broadcast_heads=config.cope_broadcast_heads,
-                )
-                if config.cope
-                else None
-            )
-
-        # flash attention make GPU go brrrrr but support is only in PyTorch >= 2.0
-        self.flash = (
-            hasattr(torch.nn.functional, "scaled_dot_product_attention")
-            and self.cope is None
-            and not config.softmax_log_norm
-        )
-        # self.flash = False
-
-        self.rotary_emb = (
-            RotaryEmbedding(dim=self.head_dim // 2, theta=config.rope_theta) if config.rope else None
-        )
-        if not self.flash:
-            print(
-                "WARNING: using slow attention. Flash Attention requires PyTorch >= 2.0"
-            )
-            # causal mask to ensure that attention is only applied to the left in the input sequence
-            self.register_buffer(
-                "bias",
-                torch.tril(torch.ones(config.block_size, config.block_size)).view(
-                    1, 1, config.block_size, config.block_size
-                ),
-            )
-        if config.working_memory:
-            self.rotation_module = RotationModule(config, layer_index=layer_index)
-            if self.config.rotate_values:
-                if self.config.dt_rank == 2:
-                    self.rotation_mode = "sin"
-                else:
-                    self.rotation_mode = "mat"
-
-    def forward(self, x, padding_mask: Optional[torch.Tensor] = None, temperature: Optional[float]=None):
-        ts = time.time()
-        B, T, C = (
-            x.size()
-        )  # batch size, sequence length, embedding dimensionality (n_embd)
-
-        rot_x = self.rot_ln(x)
-        x = self.att_ln(x)
-        
-        # calculate query, key, values for all heads in batch and move head forward to be the batch dim
-        q, k, v = self.c_attn(x).split(self.n_embd, dim=2)
-        k = k.view(B, T, self.n_head, C // self.n_head)
-        q = q.view(B, T, self.n_head, C // self.n_head)
-        v = v.view(B, T, self.n_head, C // self.n_head)
-
-        out_dict = dict()
-        if not self.training:
-            out_dict["q"] = q.detach().cpu()
-            out_dict["k"] = k.detach().cpu()
-
-        if self.config.working_memory:
-            thetaS, _, th, rot_dict = self.rotation_module(rot_x)
-            q, k = self.rotation_module.rotate_qk(thetaS, q, k, mode="sin")
-            if self.config.rotate_values:
-                # rotate each value by the inverse heading (which is what value_rotation returns)
-                # each value is seen as if from canonical heading, all are comparable
-                v, _ = self.rotation_module.rotate_qk(
-                    rot_dict["value_rotation"],
-                    v,
-                    mode=self.rotation_mode
-                )
-            # q, k, theta, th, (tt, ttt), rot_dict = self.rotate_qk(x, q, k)
-            for ke, va in rot_dict.items():
-                out_dict[ke] = va
-
-        flash = self.flash
-        if not self.training:
-            out_dict["q_rot"] = q.detach().cpu()
-            out_dict["k_rot"] = k.detach().cpu()
-            flash = False
-        
-        k = k.transpose(1, 2)  # (B, nh, T, hs)
-        q = q.transpose(1, 2)  # (B, nh, T, hs)
-        v = v.transpose(1, 2)  # (B, nh, T, hs)
-
-        if self.rotary_emb is not None:
-            q = self.rotary_emb.rotate_queries_or_keys(q)
-            k = self.rotary_emb.rotate_queries_or_keys(k)
-        # causal self-attention; Self-attend: (B, nh, T, hs) x (B, nh, hs, T) -> (B, nh, T, T)
-        
-        scale_factor = 1 / math.sqrt(q.size(-1)) / self.temperature
-        if flash:
-            # efficient attention using Flash Attention CUDA kernels
-            y = torch.nn.functional.scaled_dot_product_attention(
-                q,
-                k,
-                v,
-                attn_mask=padding_mask,
-                dropout_p=self.dropout if self.training else 0,
-                is_causal=True,
-                scale=scale_factor
-            )
-
-        else:
-            # manual implementation of attention
-            L, S = q.size(-2), k.size(-2)
-
-            attn_weight = q @ k.transpose(-2, -1) * scale_factor
-            
-            if self.config.use_padding:
-                temp_mask = torch.ones(
-                    L, S, dtype=torch.bool, device=attn_weight.device
-                ).tril(diagonal=0)
-                padding_mask = padding_mask.to(torch.bool)
-                valid_q = padding_mask.unsqueeze(1).unsqueeze(-1)   # [B, 1, L, 1]
-                valid_k = padding_mask.unsqueeze(1).unsqueeze(2)    # [B, 1, 1, S]
-                combined_mask = temp_mask.unsqueeze(0).unsqueeze(0) & valid_q & valid_k  # [B, 1, L, S]
-                attn_bias = torch.zeros_like(attn_weight)
-                attn_bias.masked_fill_(~combined_mask, float("-inf"))
-            else:
-                temp_mask = torch.ones(
-                    L, S, dtype=torch.bool, device=attn_weight.device
-                ).tril(diagonal=0)
-                attn_bias = torch.zeros_like(attn_weight)
-                attn_bias.masked_fill_(temp_mask.logical_not(), float("-inf"))
-
-            attn_weight += attn_bias
-            if self.cope is not None:
-                attn_weight = attn_weight + self.cope(q, attn_weight)
-
-            temperature = temperature if temperature is not None else self.temperature
-            attn_weight = torch.softmax(attn_weight, dim=-1)
-            y = attn_weight @ v
-
-            if not self.training:
-                out_dict["attn_weight"] = attn_weight.detach().cpu()
-        if self.config.rotate_values:
-            if self.rotation_mode == "sin":
-                rot = (rot_dict["value_rotation"][0], -rot_dict["value_rotation"][1])
-            else:
-                # inverse of a rotation matrix is its transpose since
-                # M = exp(S-S.T) => M^-1 = exp(-S+S.T) = exp((S-S.T).T) = M.T
-                rot = rot_dict["value_rotation"].transpose(-2, -1)
-            y, _ = self.rotation_module.rotate_qk(
-                # Holonomy, we must rotate by the inverse matrix
-                # to go back to current frame
-                rot,
-                y.transpose(1, 2),
-                mode=self.rotation_mode
-            )
-            y = y.contiguous().view(B, T, C)
-        else:
-            y = (
-                y.transpose(1, 2).contiguous().view(B, T, C)
-            )  # re-assemble all head outputs side by side
-
-        # output projection
-        y = self.resid_dropout(self.c_proj(y))
-        # out_dict["attn_time"] = time.time() - ts
-        if not self.training:
-            out_dict["attn_weight"] = attn_weight
-
-        # out_dict["att_x_norm"] = attn_weight.abs().mean(dim=(-2, -1)).mean().item()
-        # out_dict["q_norm"] = q.norm(dim=-1).mean().item()
-        # out_dict["k_norm"] = k.norm(dim=-1).mean().item()
-        
-        return y, {}
 
 
 class Transformer(nn.Module):
@@ -258,6 +35,9 @@ class Transformer(nn.Module):
         if config.attention_type == "normal":
             # attention_module = SSMAttention
             attention_module = CausalSelfAttention
+        elif config.attention_type == "absolute":
+            # attention_module = SSMAttention
+            attention_module = AbsoluteCausalSelfAttention
         # elif config.attention_type == "ssm":
         #     attention_module = SSMAttention
         # elif config.attention_type == "ssm2":
@@ -276,7 +56,7 @@ class Transformer(nn.Module):
                 for l in range(config.n_layer)
             ]
         )
-        self.out_norm = LayerNorm(config.n_embd, bias=config.bias)
+        self.out_norm = Norm(config)
         
         # for name, module in self.named_modules():
         #     if isinstance(module, nn.Linear):

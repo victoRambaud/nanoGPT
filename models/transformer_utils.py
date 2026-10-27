@@ -14,7 +14,9 @@ class DyT(nn.Module):
     def __init__(self, dim: int, alpha: float = 1.0, requires_grad: bool = True):
         super().__init__()
         # self.alpha = nn.Parameter(torch.ones(1) * alpha, requires_grad=requires_grad)
-        self.alpha = nn.Parameter(1/torch.arange(dim+1, 1, step=-1) * alpha, requires_grad=requires_grad)
+        self.alpha = nn.Parameter(
+            1 / torch.arange(dim + 1, 1, step=-1) * alpha, requires_grad=requires_grad
+        )
         self.alpha._no_weight_decay = True
         self.tanh = nn.Tanh()
         self.gamma = nn.Parameter(torch.ones(1), requires_grad=False)
@@ -27,10 +29,10 @@ class DyT(nn.Module):
 
 @dataclass
 class TransformerConfig:
-    transformer_type: str = "WM"    # WM or EM
+    # transformer_type: str = "WM"    # WM or EM
     use_padding: bool = False
     attention_type: str = "normal"  # "normal" or "ssm"
-    base_scale_ngpt: float = 1.0 / (1024.0 ** 0.5)
+    base_scale_ngpt: float = 1.0 / (1024.0**0.5)
     position_ssm: bool = (
         False  # used only in SSM attention if we want to also add positional embeddings
     )
@@ -46,10 +48,13 @@ class TransformerConfig:
     head_dim: int = 64
     # n_head: int = 12
     n_embd: int = 768
+    mlp_factor: int = 4
     dropout: float = 0.0
     bias: bool = (
         True  # True: bias in Linears and LayerNorms, like GPT-2. False: a bit better and faster
     )
+    norm_type: str = "layer_norm"
+    no_residual: bool = False # use residual stream or not
     rope: bool = False
     absolute_pe: bool = False
     cope: bool = False
@@ -68,58 +73,79 @@ class TransformerConfig:
     return_head: bool = False
     same_block_init: bool = True
     base_freq: int = 1024
+    base_freq_h: int = 1024
+    min_base_freq: int = 64
     freq_init_alpha: float = 1.0
 
-    g_act_fn: str = "relu"
+    path_householder: bool = False  # uses Path Attention
+
+    g_act_fn: str = "identity"
     diag_block_size: int = 2  # for velocity intrinsic dimension
     merge: str = "mul"
     working_memory: bool = False  # if we learn RoPE like rotations on keys and queries
     sensory_attention: bool = True
+    use_mlp: bool = True
+    num_householder: int = 2    # for path attention
+    ssm_attn: str = ""  # use path_householder or gdn2
 
     inv_scale_attn: bool = False
     em_qk_positions: bool = True
     dt_rank: Optional[int] = None
     block_max_init: float = 1.0
-    block_layer_scaling_ratio: float = 0.    # 
+    block_layer_scaling_ratio: float = 0.0  #
     block_min_init: Optional[int] = 0.01  # for landscale 1, we don't want
     approx_method: str = "taylor"
     n_approx_steps: int = -1  # set to 0 if torch exp is to be used
     block_share_rotation: bool = False  # use the same rotation matrices per head
     commute: bool = True
-    tanh_alpha: float = 1.0
-    follow_rank: bool = False
-    init_same_head: bool = True
-    shared_inner_theta: bool = True
-    log_freq: bool = False
-    freq_grad: bool = True
+    tanh_alpha: float = 0.0
+    shared_inner_theta: bool = False  # if false, each head has its own theta projection
+    init_gk: bool = False  # if false, g_k = g_q in EM Models
 
     freq_init_uniform: bool = False
+    init_same_head: bool = True
+    follow_rank: bool = True
 
     share_velocity: bool = True
     g_init: str = "randn"
     g_scale: float = 0.25
 
-    softmax_log_norm: bool = False
-    path_householder: bool = False
-
     # egoformer
     ego2allo: bool = False
     share_ego_encoders: bool = False
-    full_ego_path: bool = False
+    full_ego_path: bool = True
     rotate_values: bool = False
     value_base_freq: float = 1/8
     linear_decay: float = 5.0
     attn_outproj: bool = True
     angle_scale: float = 3.14/2
     single_freq: bool = False
+    freq_grad: bool = False
     zero_freqs: bool = False
     diff_norms: bool = False
     out_norm: bool = True
-    use_mlp: bool = True
+    value_inv: bool = False
+    integer_freqs: bool = False
+    gate_algebra: bool = True
+    norm_velocities: bool = False
+    estimate_radius: bool = False    # used in SE(2) penalization, to avoid using a default radius of R
+    reset_frames: bool = False
+    residual_gating: bool = False
+    kv_gates: bool = False
+    same_gqk: bool = False
+
+    softmax_log_norm: bool = False
 
     def __post_init__(self):
-        # if self.n_approx_steps == -1:
+        # if self.n_approx_steps == -1 and self.commute:
         #     self.diag_block_size = 2
+
+        # if self.rope:
+        #     self.working_memory = False
+        #     self.ego2allo = False
+            
+        if self.ego2allo:
+            self.shared_inner_theta = False
 
         if self.dt_rank is None:
             self.dt_rank = self.diag_block_size
@@ -127,13 +153,12 @@ class TransformerConfig:
         self.n_head = self.n_embd // self.head_dim
         self.n_diag_blocks = self.head_dim // self.diag_block_size
 
-        if self.ego2allo:
-            self.shared_inner_theta = False
-
         if not self.ego2allo:
             self.rotate_values = False
-        
+
         if self.freq_init_uniform:
+
+            self.block_min_init = self.block_max_init / self.base_freq
             assert self.block_max_init > self.block_min_init
             self.step_block = (
                 -(self.block_max_init - self.block_min_init) / self.n_diag_blocks
@@ -291,15 +316,15 @@ class MLP(nn.Module):
 
     def __init__(self, config: TransformerConfig):
         super().__init__()
-        self.c_fc = nn.Linear(config.n_embd, 4 * config.n_embd, bias=config.bias)
-        self.gelu = nn.GELU()
-        self.c_proj = nn.Linear(4 * config.n_embd, config.n_embd, bias=config.bias)
+        self.c_fc = nn.Linear(config.n_embd, config.mlp_factor * config.n_embd, bias=config.bias)
+        self.gelu = nn.ReLU()
+        self.c_proj = nn.Linear(config.mlp_factor * config.n_embd, config.n_embd, bias=config.bias)
         self.dropout = nn.Dropout(config.dropout)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.c_fc(x)
-        x = self.gelu(x)
-        x = self.c_proj(x)
+        h = self.gelu(x)
+        x = self.c_proj(h)
         x = self.dropout(x)
         return x
 
@@ -307,7 +332,7 @@ class MLP(nn.Module):
 class LayerNorm(nn.Module):
     """LayerNorm but with an optional bias. PyTorch doesn't support simply bias=False"""
 
-    def __init__(self, ndim, bias):
+    def __init__(self, ndim: int, bias: bool):
         super().__init__()
         self.weight = nn.Parameter(torch.ones(ndim))
         self.bias = nn.Parameter(torch.zeros(ndim)) if bias else None
@@ -343,6 +368,18 @@ class HouseHolderAttention(nn.Module):
         return out, {}
 
 
+class Norm(nn.Module):
+    def __init__(self, config: TransformerConfig):
+        super().__init__()
+        if config.norm_type == "rms":
+            self.norm_layer = nn.RMSNorm(config.n_embd)
+        else:
+            self.norm_layer = LayerNorm(config.n_embd, bias=config.bias)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.norm_layer(x)
+
+
 class Block(nn.Module):
 
     def __init__(
@@ -354,7 +391,7 @@ class Block(nn.Module):
     ):
         super().__init__()
         self.config = config
-        self.ln_1 = LayerNorm(config.n_embd, bias=config.bias) if not config.diff_norms else nn.Identity()
+        self.ln_1 = Norm(config)
 
         if config.path_householder:
             self.attn = HouseHolderAttention(config)
@@ -363,7 +400,7 @@ class Block(nn.Module):
                 config, cope_module=cope_module, layer_index=layer_index
             )
         self.ln_2 = (
-            LayerNorm(config.n_embd, bias=config.bias)
+            Norm(config)
             if config.use_mlp
             else nn.Identity()
         )
