@@ -58,7 +58,7 @@ if init_from == "scratch":
         if ego2allo:
             wandb_run_name = f"EGO_rank{dt_rank}"
         else:
-            wandb_run_name = f"WM_L{n_layer}_n{n_embd}_base{base_freq}_rank{dt_rank}_ls{block_layer_scaling_ratio}_innerTH{shared_inner_theta}"
+            wandb_run_name = f"WM_L{n_layer}_n{n_embd}_base{base_freq}_rank{dt_rank}"
     # elif transformer_type == "EM":
     #     wandb_run_name = f"EM_L{n_layer}_n{n_embd}_base{base_freq}_rank{dt_rank}_ls{block_layer_scaling_ratio}"
     # elif transformer_type == "nEMWM":
