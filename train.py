@@ -71,6 +71,7 @@ if __name__ == "__main__":
     bias = False  # do we use bias inside LayerNorm and Linear layers?
     rope: bool = False
     cope: bool = False
+    fox: bool = False
     working_memory: bool = True
     episodic_memory: bool = False
     n_episodic_memory: bool = False
@@ -280,7 +281,8 @@ if __name__ == "__main__":
         single_freq=single_freq,
         gate_algebra=gate_algebra,
         freq_grad=freq_grad,
-        attention_type=attention_type
+        attention_type=attention_type,
+        fox=fox
     )  # start with model_args from command line
 
     if init_from == "scratch":

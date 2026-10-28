@@ -133,6 +133,7 @@ class TransformerConfig:
     residual_gating: bool = False
     kv_gates: bool = False
     same_gqk: bool = False
+    fox: bool = False
 
     softmax_log_norm: bool = False
 
@@ -146,6 +147,9 @@ class TransformerConfig:
             
         if self.ego2allo:
             self.shared_inner_theta = False
+
+        if self.fox:
+            self.cope = False
 
         if self.dt_rank is None:
             self.dt_rank = self.diag_block_size

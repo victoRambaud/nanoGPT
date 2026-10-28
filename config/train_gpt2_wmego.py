@@ -31,7 +31,7 @@ n_embd = 768
 dropout = 0.0  # for pretraining 0 is good, for finetuning try 0.1+
 bias = False  # do we use bias inside LayerNorm and Linear layers?
 rope: bool = False
-cope: bool = True
+fox: bool = True
 working_memory: bool = True
 episodic_memory: bool = False
 n_episodic_memory: bool = False
@@ -51,7 +51,7 @@ single_freq = True
 gate_algebra = True
 freq_grad = False
 attention_type = "normal"
-compile = False
+compile = True
 
 # run name
 if init_from == "scratch":
@@ -60,8 +60,8 @@ if init_from == "scratch":
             wandb_run_name = "EGO"
             if rotate_values:
                 wandb_run_name += "_ROTVAL"
-            if cope:
-                wandb_run_name += "_COPE"
+            if fox:
+                wandb_run_name += "_FOX"
             wandb_run_name += f"_rank{dt_rank}"
         else:
             wandb_run_name = f"WM_L{n_layer}_n{n_embd}_base{base_freq}_rank{dt_rank}"
@@ -76,8 +76,8 @@ if init_from == "scratch":
     #     wandb_run_name = f"nROPE_invscale_{inv_scale_attn}_L{n_layer}_n{n_embd}_base{base_freq}_rank{dt_rank}_ls{block_layer_scaling_ratio}"
     # elif transformer_type == "nEM":
     #     wandb_run_name = f"nEM_invscale_{inv_scale_attn}_qkpos{em_qk_positions}_L{n_layer}_n{n_embd}_base{base_freq}_rank{dt_rank}_ls{block_layer_scaling_ratio}"
-    elif cope:
-        wandb_run_name = f"COPE_L{n_layer}_n{n_embd}"
+    elif fox:
+        wandb_run_name = f"FOX_L{n_layer}_n{n_embd}"
         transformer_type = "WM"
     else:
         rope = True

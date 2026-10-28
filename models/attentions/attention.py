@@ -74,6 +74,7 @@ class CausalSelfAttention(nn.Module):
     ):
         super().__init__()
         self.config = config
+        self.fox = config.fox
 
         assert config.n_embd % config.n_head == 0
         # key, query, value projections for all heads, but in a batch
@@ -93,22 +94,28 @@ class CausalSelfAttention(nn.Module):
                 self.rot_ln = Norm(config)
 
         # if we share a projection for cope key and query we need to have
-        self.cope_shared_key_query = config.cope_shared_key_query
+        self.cope_shared_key_query = config.cope_shared_key_query and not self.fox
         if self.cope_shared_key_query:
             config.sep_key = True
 
         self.cope_key = (
             nn.Linear(config.n_embd, config.n_embd, bias=config.bias)
-            if config.cope and config.sep_key
+            if config.cope and not self.fox and config.sep_key
             else None
         )
         self.cope_queries = (
             nn.Linear(config.n_embd, config.n_embd, bias=config.bias)
-            if config.cope and config.sep_query and not config.cope_shared_key_query
+            if config.cope and not self.fox and config.sep_query and not config.cope_shared_key_query
             else None
         )
         # output projection
-        self.c_proj = nn.Linear(config.n_embd, config.n_embd, bias=config.bias)
+        if config.attn_outproj:
+            self.c_proj = nn.Linear(config.n_embd, config.n_embd, bias=config.bias)
+            # self.c_proj.weight = nn.Parameter(
+            #     torch.linalg.inv(self.c_attn.weight.T[:, -config.n_embd :]).T
+            # )
+        else:
+            self.c_proj = nn.Identity()
         # regularization
         self.attn_dropout = nn.Dropout(config.dropout)
         self.resid_dropout = nn.Dropout(config.dropout)
@@ -123,7 +130,12 @@ class CausalSelfAttention(nn.Module):
         self.n_embd = config.n_embd
         self.dropout = config.dropout
 
-        if cope_module is not None:
+        # FoX: a learned retention gate per token and attention head.
+        if self.fox:
+            self.fox_gate = nn.Linear(config.n_embd, config.n_head, bias=True)
+            nn.init.zeros_(self.fox_gate.bias)
+
+        if cope_module is not None and not self.fox:
             print("Single CoPE module for whole Transformer")
             self.cope = cope_module
         else:
@@ -133,7 +145,7 @@ class CausalSelfAttention(nn.Module):
                     head_dim=self.head_dim,
                     broadcast_heads=config.cope_broadcast_heads,
                 )
-                if config.cope
+                if config.cope and not self.fox
                 else None
             )
 
@@ -209,7 +221,6 @@ class CausalSelfAttention(nn.Module):
         else:
             L = T
 
-        rot_dict_kv, rot_dict_q = dict(), dict()
         # calculate query, key, values for all heads in batch and move head forward to be the batch dim
         q, k, v = self.qkv_forward(x, q_x)
         k = k.view(B, T, self.n_head, C // self.n_head)
@@ -233,6 +244,7 @@ class CausalSelfAttention(nn.Module):
             out_dict["q"] = q.detach().cpu()
             out_dict["k"] = k.detach().cpu()
 
+        rot_dict_kv = rot_dict_q = {}
         if self.config.working_memory:
             q, k, v, out_dict, rot_dict_kv, rot_dict_q = self.rotate_qkv(
                 x=x, q_x=q_x, q=q, k=k, v=v, out_dict=out_dict
@@ -262,74 +274,94 @@ class CausalSelfAttention(nn.Module):
         q: torch.Tensor,
         k: torch.Tensor,
         v: torch.Tensor,
-        padding_mask: torch.Tensor,
+        padding_mask: Optional[torch.Tensor],
         out_dict: Dict,
-        key_padding_mask: Optional[torch.Tensor]=None
+        key_padding_mask: Optional[torch.Tensor] = None,
+        fox_cumsum: Optional[torch.Tensor] = None,
     ) -> Tuple[torch.Tensor, Dict]:
         scale_factor = 1 / math.sqrt(q.size(-1)) / self.temperature
+
+        # FoX applies to causal self-attention. Cross-attention stays unchanged:
+        # there is no natural query-to-key temporal interval for a generic context.
+        use_fox = fox_cumsum is not None and key_padding_mask is None
+
         if self.flash:
-            # efficient attention using Flash Attention CUDA kernels
-            padding_mask, is_causal = make_sdpa_mask(padding_mask, key_padding_mask=key_padding_mask)
-            y = torch.nn.functional.scaled_dot_product_attention(
-                q,
-                k,
-                v,
-                attn_mask=padding_mask,
-                dropout_p=self.dropout if self.training else 0,
-                is_causal=is_causal,
-                scale=scale_factor,
+            v_for_sdpa = v
+            if use_fox:
+                # Encode the additive FoX bias inside a Q/K dot product, so
+                # standard scaled_dot_product_attention can still use its
+                # optimized backends without materializing [B, H, L, L].
+                #
+                # s_ij = scale*q_i.k_j + c_i-c_j
+                #      == scale*[q_i, 1/scale].[k_j, c_last-c_j]
+                #         up to the row-constant c_i-c_last.
+                d = q.size(-1)
+                extra_pad = (-(d + 1)) % 8
+
+                q_extra = torch.full_like(q[..., :1], 1.0 / scale_factor)
+                k_extra = (
+                    fox_cumsum[..., -1:] - fox_cumsum
+                ).unsqueeze(-1).to(k.dtype)
+
+                if extra_pad:
+                    q_extra = F.pad(q_extra, (0, extra_pad))
+                    k_extra = F.pad(k_extra, (0, extra_pad))
+
+                q = torch.cat([q, q_extra], dim=-1)
+                k = torch.cat([k, k_extra], dim=-1)
+                # Equal Q/K/V head dimensions maximize FlashAttention
+                # backend compatibility. Discard the extra output channels.
+                v_for_sdpa = F.pad(v, (0, 1 + extra_pad))
+
+            attn_mask, is_causal = make_sdpa_mask(
+                padding_mask, key_padding_mask=key_padding_mask
             )
+            y = F.scaled_dot_product_attention(
+                q, k, v_for_sdpa,
+                attn_mask=attn_mask,
+                dropout_p=self.dropout if self.training else 0.0,
+                is_causal=is_causal,
+                scale=scale_factor,  # Preserve the ORIGINAL head-dimension scale.
+            )
+            if use_fox:
+                y = y[..., :d]
 
         else:
-            # manual implementation of attention
             L, S = q.size(-2), k.size(-2)
-
             attn_weight = q @ k.transpose(-2, -1) * scale_factor
-            
-            # Causal mask [1, 1, L, S]
-            combined_mask = torch.ones(
-                L, S,
-                device=attn_weight.device,
-                dtype=torch.bool,
-            ).tril()[None, None, :, :]
 
-            if padding_mask is not None:
-                # Mask keys, not queries, before softmax.
-                valid_k = padding_mask[:, None, None, :].bool()
-                combined_mask = combined_mask & valid_k
-
-            # Use finite masking to avoid all-inf rows.
-            mask_value = torch.finfo(attn_weight.dtype).min
-
-            attn_weight = attn_weight.masked_fill(
-                ~combined_mask, mask_value
-            )
-
-            if self.cope is not None:
+            if use_fox:
+                # Softmax cancels c_i, leaving a key-side bias -c_j.
                 attn_weight = (
-                    attn_weight + self.cope(q, attn_weight)
+                    attn_weight.float() - fox_cumsum[:, :, None, :]
                 )
 
-            # Preserve the mask after adding CoPE.
-            attn_weight = attn_weight.masked_fill(
-                ~combined_mask, mask_value
-            )
+            if key_padding_mask is not None:
+                # Standard, noncausal cross-attention.
+                combined_mask = key_padding_mask[:, None, None, :].bool()
+            else:
+                # Causal self-attention.
+                combined_mask = torch.ones(
+                    L, S, device=attn_weight.device, dtype=torch.bool
+                ).tril()[None, None, :, :]
+                if padding_mask is not None:
+                    combined_mask = (
+                        combined_mask & padding_mask[:, None, None, :].bool()
+                    )
 
-            attn_weight = torch.softmax(
-                attn_weight.float(), dim=-1
-            )
+            mask_value = torch.finfo(attn_weight.dtype).min
+            attn_weight = attn_weight.masked_fill(~combined_mask, mask_value)
 
-            # Guarantee invalid keys have zero probability,
-            # including in fully masked rows.
-            attn_weight = attn_weight.masked_fill(
-                ~combined_mask, 0.0
-            )
+            if self.cope is not None:
+                attn_weight = attn_weight + self.cope(q, attn_weight)
 
-            # Mask padded queries AFTER softmax.
+            attn_weight = attn_weight.masked_fill(~combined_mask, mask_value)
+            attn_weight = torch.softmax(attn_weight.float(), dim=-1)
+            attn_weight = attn_weight.masked_fill(~combined_mask, 0.0)
+
             if padding_mask is not None:
-                valid_q = padding_mask[:, None, :, None].bool()
                 attn_weight = attn_weight.masked_fill(
-                    ~valid_q, 0.0
+                    ~padding_mask[:, None, :, None].bool(), 0.0
                 )
 
             attn_weight = attn_weight.to(v.dtype)
@@ -337,6 +369,13 @@ class CausalSelfAttention(nn.Module):
 
             if not self.training:
                 out_dict["attn_weight"] = attn_weight.detach().cpu()
+
+        # SDPA also needs explicit query masking: its key mask does not zero
+        # output vectors at padded query positions.
+        if padding_mask is not None:
+            y = y.masked_fill(
+                ~padding_mask[:, None, :, None].bool(), 0.0
+            )
 
         return y, out_dict
 
@@ -348,8 +387,20 @@ class CausalSelfAttention(nn.Module):
     ):
         B, T, C = x.size()
         q, k, v, out_dict, rot_dict_kv, rot_dict_q = self.qkv_prep(x)
+
+        fox_cumsum = None
+        if self.fox:
+            # Float32 prefix scan of log retention factors: [B, H, T].
+            log_fgate = F.logsigmoid(self.fox_gate(x).float())
+            if padding_mask is not None:
+                log_fgate = log_fgate.masked_fill(
+                    ~padding_mask.unsqueeze(-1).bool(), 0.0
+                )
+            fox_cumsum = log_fgate.transpose(1, 2).cumsum(dim=-1)
+
         y, out_dict = self.compute_attention(
-            q=q, k=k, v=v, padding_mask=padding_mask, out_dict=out_dict
+            q=q, k=k, v=v, padding_mask=padding_mask, out_dict=out_dict,
+            fox_cumsum=fox_cumsum,
         )
 
         if self.config.rotate_values:
