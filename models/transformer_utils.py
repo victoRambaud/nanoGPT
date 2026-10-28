@@ -60,7 +60,7 @@ class TransformerConfig:
     cope: bool = False
     cope_type: str = "normal"
     cope_bind: str = "add"  # do we add or multiply the CoPE attention weights ?
-    cope_npos_max: int = 1024
+    cope_npos_max: int = 64
     single_cope: bool = False
     sep_key: bool = False
     sep_query: bool = False
