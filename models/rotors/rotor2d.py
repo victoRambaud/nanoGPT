@@ -1,3 +1,4 @@
+
 import torch
 import torch.nn as nn
 import torch_parallel_scan as tps
@@ -33,21 +34,15 @@ def reference_compose(x: torch.Tensor, y: torch.Tensor):
 
 class Rotor2D(nn.Module):
     """
-    Two independent SO(2) frame groups per attention head:
+    H1 acts on N and values.
 
-      H1: rotates motion into N and the first half of value blocks.
-      H2: rotates only the second half of value blocks.
+    Optionally, H2 acts on the second half of value blocks,
+    while H1 acts on the first half.
 
-    When gate_algebra=True, angular *increments* are gated before
-    path integration, and H1 uses the same integrated angle for N and V1.
+    With h2=False, H1 acts on all value blocks.
 
-    Both groups use unit frequency on every value block.
-    The reset decision (when enabled) is shared, while their angles
-    and reference angles remain independent.
-
-    Returns:
-      allocentric_velocity: [B, L, H, K]
-      value_rotation: (cos, sin), both [B, L, H, K]
+    Angular increments are gated before path integration.
+    All value rotations use fixed unit frequency.
     """
 
     def __init__(self, config: TransformerConfig):
@@ -58,33 +53,39 @@ class Rotor2D(nn.Module):
         self.n_blocks = config.n_diag_blocks
         self.reset_frames = config.reset_frames
 
-        assert config.dt_rank == 2, "Rotor2D requires dt_rank == 2"
-        if config.rotate_values:
-            assert self.n_blocks % 2 == 0, "Value blocks must split evenly between H1 and H2"
+        # H2 only exists when value rotation is enabled.
+        self.use_h2 = config.h2 and config.rotate_values
 
-        # H1: angular velocity in so(2)
+        assert config.dt_rank == 2, "Rotor2D requires dt_rank == 2"
+
+        if self.use_h2:
+            assert self.n_blocks % 2 == 0, (
+                "Value blocks must split evenly between H1 and H2"
+            )
+
+        # H1: angular velocity
         self.angle_proj = nn.Linear(
             config.n_embd,
             self.n_heads,
             bias=False,
         )
 
-        # H2: independent angular velocity, used only for values
-        if config.rotate_values:
+        # H2: optional independent angular velocity
+        if self.use_h2:
             self.angle_proj_h2 = nn.Linear(
                 config.n_embd,
                 self.n_heads,
                 bias=False,
             )
 
-        # Egocentric velocity in R^2 (rotated only by H1)
+        # Egocentric velocity in R2
         self.allocentric_velocity = nn.Linear(
             config.n_embd,
             self.n_heads * 2,
             bias=False,
         )
 
-        # Project allocentric motion into N (NOT a value-frequency projection)
+        # Projection into N
         self.out_proj = nn.Linear(
             2,
             self.n_blocks,
@@ -92,14 +93,13 @@ class Rotor2D(nn.Module):
         )
 
         if config.gate_algebra:
-            # H1 gate controls the angle used by BOTH N and V1
+            # H1 gate, acting on both N and V1 (or all V)
             self.allo_gate = nn.Sequential(
                 nn.Linear(config.n_embd, self.n_heads),
                 nn.Sigmoid(),
             )
 
-            if config.rotate_values:
-                # H2 gate controls only V2
+            if self.use_h2:
                 self.value_gate_h2 = nn.Sequential(
                     nn.Linear(config.n_embd, self.n_heads),
                     nn.Sigmoid(),
@@ -117,28 +117,29 @@ class Rotor2D(nn.Module):
         movement_magnitude = self.allocentric_velocity(x).view(
             b, l, self.n_heads, 2
         )
+
         angular_velocity = self.angle_proj(x).view(
             b, l, self.n_heads
         )
 
-        if self.config.rotate_values:
+        if self.use_h2:
             angular_velocity_h2 = self.angle_proj_h2(x).view(
                 b, l, self.n_heads
             )
 
-        # Gate angular INCREMENTS before integration.
+        # Gate angular increments before integration.
         if self.config.gate_algebra:
             angular_velocity = angular_velocity * self.allo_gate(x)
-            if self.config.rotate_values:
+
+            if self.use_h2:
                 angular_velocity_h2 = (
                     angular_velocity_h2 * self.value_gate_h2(x)
                 )
 
-        # Accumulate angles in FP32 (useful for long sequences / AMP).
         angle_pi = angular_velocity.float().cumsum(dim=1)
         reference_angle = torch.zeros_like(angle_pi)
 
-        if self.config.rotate_values:
+        if self.use_h2:
             angle_pi_h2 = angular_velocity_h2.float().cumsum(dim=1)
             reference_angle_h2 = torch.zeros_like(angle_pi_h2)
 
@@ -157,29 +158,33 @@ class Rotor2D(nn.Module):
                 positions,
                 -1,
             )
+
             last_reset = reset_positions.cummax(dim=1).values
 
             angles = torch.cat([
                 torch.zeros_like(angle_pi[:, :1]),
                 angle_pi,
             ], dim=1)
+
             reference_angle = angles.gather(
                 dim=1,
                 index=last_reset + 1,
             )
 
-            if self.config.rotate_values:
+            if self.use_h2:
                 angles_h2 = torch.cat([
                     torch.zeros_like(angle_pi_h2[:, :1]),
                     angle_pi_h2,
                 ], dim=1)
+
                 reference_angle_h2 = angles_h2.gather(
                     dim=1,
                     index=last_reset + 1,
                 )
 
         working_angle = angle_pi - reference_angle
-        if self.config.rotate_values:
+
+        if self.use_h2:
             working_angle_h2 = angle_pi_h2 - reference_angle_h2
 
         # Only H1 acts on N.
@@ -195,25 +200,31 @@ class Rotor2D(nn.Module):
                 vx * sin_theta + vy * cos_theta,
             ],
             dim=-1,
-        )  # [B, L, H, 2]
+        )
 
         allocentric_velocity = self.out_proj(allo_velocity)
 
         value_rotation = None
-        if self.config.rotate_values:
-            # Every value block has frequency 1. H1 -> V1, H2 -> V2.
-            half = self.n_blocks // 2
-            value_angle_h1 = working_angle.unsqueeze(-1).expand(
-                -1, -1, -1, half
-            )
-            value_angle_h2 = working_angle_h2.unsqueeze(-1).expand(
-                -1, -1, -1, half
-            )
 
-            value_angle = torch.cat(
-                [value_angle_h1, value_angle_h2],
-                dim=-1,
-            )  # [B, L, H, K]
+        if self.config.rotate_values:
+            if self.use_h2:
+                # H1 -> first half, H2 -> second half
+                half = self.n_blocks // 2
+
+                value_angle = torch.cat([
+                    working_angle.unsqueeze(-1).expand(
+                        -1, -1, -1, half
+                    ),
+                    working_angle_h2.unsqueeze(-1).expand(
+                        -1, -1, -1, half
+                    ),
+                ], dim=-1)
+
+            else:
+                # Original formulation: H1 acts on ALL values.
+                value_angle = working_angle.unsqueeze(-1).expand(
+                    -1, -1, -1, self.n_blocks
+                )
 
             value_rotation = (
                 torch.cos(value_angle),
@@ -224,7 +235,8 @@ class Rotor2D(nn.Module):
             movement_magnitude,
             angular_velocity,
         )
-        if self.config.rotate_values:
+
+        if self.use_h2:
             velocities_norms = velocities_norms + 4.0 * (
                 1.0 - torch.cos(angular_velocity_h2)
             )
@@ -233,19 +245,17 @@ class Rotor2D(nn.Module):
             "activity_norm_lie_algebra": velocities_norms,
             "value_rotation": value_rotation,
             "allo_velocity": allo_velocity,
-            # "max_angle": working_angle.abs().max().item(),
-            # "min_angle": working_angle.abs().min().item(),
             "head_angle": angular_velocity,
             "reference_angle": reference_angle,
             "working_angle": working_angle,
             "origin_gate": origin_gate,
             "head_angle_h2": (
-                angular_velocity_h2 if self.config.rotate_values else None
+                angular_velocity_h2 if self.use_h2 else None
             ),
             "reference_angle_h2": (
-                reference_angle_h2 if self.config.rotate_values else None
+                reference_angle_h2 if self.use_h2 else None
             ),
             "working_angle_h2": (
-                working_angle_h2 if self.config.rotate_values else None
+                working_angle_h2 if self.use_h2 else None
             ),
         }

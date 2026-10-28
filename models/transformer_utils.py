@@ -135,6 +135,7 @@ class TransformerConfig:
     kv_gates: bool = False
     same_gqk: bool = False
     fox: bool = False
+    h2: bool = False
 
     softmax_log_norm: bool = False
 
