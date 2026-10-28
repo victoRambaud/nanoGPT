@@ -309,7 +309,6 @@ class CausalSelfAttention(nn.Module):
             if self.cope is not None:
                 attn_weight = attn_weight + self.cope(q, attn_weight)
 
-            temperature = temperature if temperature is not None else self.temperature
             attn_weight = torch.softmax(attn_weight, dim=-1)
             y = attn_weight @ v
             if not self.training:
