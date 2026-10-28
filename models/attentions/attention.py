@@ -285,32 +285,56 @@ class CausalSelfAttention(nn.Module):
             L, S = q.size(-2), k.size(-2)
 
             attn_weight = q @ k.transpose(-2, -1) * scale_factor
+            
+            # Causal mask [1, 1, L, S]
+            combined_mask = torch.ones(
+                L, S,
+                device=attn_weight.device,
+                dtype=torch.bool,
+            ).tril()[None, None, :, :]
 
-            if self.config.use_padding:
-                temp_mask = torch.ones(
-                    L, S, dtype=torch.bool, device=attn_weight.device
-                ).tril(diagonal=0)
-                padding_mask = padding_mask.to(torch.bool)
-                valid_q = padding_mask.unsqueeze(1).unsqueeze(-1)  # [B, 1, L, 1]
-                valid_k = padding_mask.unsqueeze(1).unsqueeze(2)  # [B, 1, 1, S]
-                combined_mask = (
-                    temp_mask.unsqueeze(0).unsqueeze(0) & valid_q & valid_k
-                )  # [B, 1, L, S]
-                attn_bias = torch.zeros_like(attn_weight)
-                attn_bias.masked_fill_(~combined_mask, float("-inf"))
-            else:
-                temp_mask = torch.ones(
-                    L, S, dtype=torch.bool, device=attn_weight.device
-                ).tril(diagonal=0)
-                attn_bias = torch.zeros_like(attn_weight)
-                attn_bias.masked_fill_(temp_mask.logical_not(), float("-inf"))
+            if padding_mask is not None:
+                # Mask keys, not queries, before softmax.
+                valid_k = padding_mask[:, None, None, :].bool()
+                combined_mask = combined_mask & valid_k
 
-            attn_weight += attn_bias
+            # Use finite masking to avoid all-inf rows.
+            mask_value = torch.finfo(attn_weight.dtype).min
+
+            attn_weight = attn_weight.masked_fill(
+                ~combined_mask, mask_value
+            )
+
             if self.cope is not None:
-                attn_weight = attn_weight + self.cope(q, attn_weight)
+                attn_weight = (
+                    attn_weight + self.cope(q, attn_weight)
+                )
 
-            attn_weight = torch.softmax(attn_weight, dim=-1)
+            # Preserve the mask after adding CoPE.
+            attn_weight = attn_weight.masked_fill(
+                ~combined_mask, mask_value
+            )
+
+            attn_weight = torch.softmax(
+                attn_weight.float(), dim=-1
+            )
+
+            # Guarantee invalid keys have zero probability,
+            # including in fully masked rows.
+            attn_weight = attn_weight.masked_fill(
+                ~combined_mask, 0.0
+            )
+
+            # Mask padded queries AFTER softmax.
+            if padding_mask is not None:
+                valid_q = padding_mask[:, None, :, None].bool()
+                attn_weight = attn_weight.masked_fill(
+                    ~valid_q, 0.0
+                )
+
+            attn_weight = attn_weight.to(v.dtype)
             y = attn_weight @ v
+
             if not self.training:
                 out_dict["attn_weight"] = attn_weight.detach().cpu()
 
