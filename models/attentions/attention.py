@@ -233,16 +233,16 @@ class CausalSelfAttention(nn.Module):
             v = v * vg.sigmoid().unsqueeze(-1)
 
         out_dict = dict()
-        if not self.training:
-            out_dict["raw_values"] = v.detach().cpu()
+        # if not self.training:
+        #     out_dict["raw_values"] = v.detach().cpu()
 
         if self.config.value_inv:
             v = self.orth(F.relu(v))
             out_dict["v_in_activity_norm"] = v
 
-        if not self.training:
-            out_dict["q"] = q.detach().cpu()
-            out_dict["k"] = k.detach().cpu()
+        # if not self.training:
+        #     out_dict["q"] = q.detach().cpu()
+        #     out_dict["k"] = k.detach().cpu()
 
         rot_dict_kv = rot_dict_q = {}
         if self.config.working_memory:
@@ -250,17 +250,17 @@ class CausalSelfAttention(nn.Module):
                 x=x, q_x=q_x, q=q, k=k, v=v, out_dict=out_dict
             )
 
-        if not self.training:
-            out_dict["q_rot"] = q.detach().cpu()
-            out_dict["k_rot"] = k.detach().cpu()
-            flash = False
+        # if not self.training:
+        #     out_dict["q_rot"] = q.detach().cpu()
+        #     out_dict["k_rot"] = k.detach().cpu()
+        #     flash = False
 
         k = k.transpose(1, 2)  # (B, nh, T, hs)
         q = q.transpose(1, 2)  # (B, nh, T, hs)
         v = v.transpose(1, 2)  # (B, nh, T, hs)
 
-        if not self.training:
-            out_dict["rotated_values"] = v.transpose(1, 2).detach().cpu()
+        # if not self.training:
+        #     out_dict["rotated_values"] = v.transpose(1, 2).detach().cpu()
 
         if self.rotary_emb is not None:
             q = self.rotary_emb.rotate_queries_or_keys(q)
@@ -367,8 +367,8 @@ class CausalSelfAttention(nn.Module):
             attn_weight = attn_weight.to(v.dtype)
             y = attn_weight @ v
 
-            if not self.training:
-                out_dict["attn_weight"] = attn_weight.detach().cpu()
+            # if not self.training:
+            #     out_dict["attn_weight"] = attn_weight.detach().cpu()
 
         # SDPA also needs explicit query masking: its key mask does not zero
         # output vectors at padded query positions.
@@ -416,17 +416,17 @@ class CausalSelfAttention(nn.Module):
                 out_dict["v_out_activity_norm"] = y
 
             y = y.contiguous().view(B, T, C)
-            out_dict["retrieved_values"] = y.detach().cpu()
+            # out_dict["retrieved_values"] = y.detach().cpu()
         else:
 
             y = (
                 y.transpose(1, 2).contiguous().view(B, T, C)
             )  # re-assemble all head outputs side by side
-            out_dict["retrieved_values"] = y.detach().cpu()
+            # out_dict["retrieved_values"] = y.detach().cpu()
 
         # output projection
         y = self.resid_dropout(self.c_proj(y))
-        if not self.training:
-            out_dict["y"] = y.detach().cpu()
+        # if not self.training:
+            # out_dict["y"] = y.detach().cpu()
 
         return y, out_dict
