@@ -45,8 +45,8 @@ block_max_init: float = 1.0
 
 # egoformer
 commute = True
-rotate_values = True
-ego2allo = True
+rotate_values = False
+ego2allo = False
 single_freq = True
 gate_algebra = True
 freq_grad = False
