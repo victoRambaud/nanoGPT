@@ -31,7 +31,7 @@ n_embd = 768
 dropout = 0.0  # for pretraining 0 is good, for finetuning try 0.1+
 bias = False  # do we use bias inside LayerNorm and Linear layers?
 rope: bool = False
-fox: bool = False
+fox: bool = True
 working_memory: bool = True
 episodic_memory: bool = False
 n_episodic_memory: bool = False
@@ -45,8 +45,8 @@ block_max_init: float = 1.0
 
 # egoformer
 commute = True
-rotate_values = False
-ego2allo = False
+rotate_values = True
+ego2allo = True
 single_freq = True
 gate_algebra = True
 freq_grad = False
