@@ -85,15 +85,25 @@ class GPT(nn.Module):
         # forward the GPT model itself
         tok_emb = self.token_embedding(idx)  # token embeddings of shape (b, t, n_embd)
         x = self.drop(tok_emb)
-        x, _ = self.transformer(x)
+        x, out_dict = self.transformer(x)
         x = self.ln_f(x)
 
+        loss_reg = 0.0
         if targets is not None:
             # if we are given some desired targets also calculate the loss
             logits = self.lm_head(x)
             loss = F.cross_entropy(
                 logits.view(-1, logits.size(-1)), targets.view(-1), ignore_index=-1
             )
+            
+            if self.config.reg_loss_weight > 0:
+                for k, v in out_dict.items():
+                    if "activity_norm_lie_algebra" in k:
+                        loss_reg = loss_reg + v
+                
+                loss_reg = loss_reg.mean()
+                # loss = loss + self.config.reg_loss_weight * loss_reg
+            return logits, loss, loss_reg
         else:
             # inference-time mini-optimization: only forward the lm_head on the very last position
             logits = self.lm_head(
@@ -101,7 +111,7 @@ class GPT(nn.Module):
             )  # note: using list [-1] to preserve the time dim
             loss = None
 
-        return logits, loss
+            return logits, loss
 
     def crop_block_size(self, block_size):
         # model surgery to decrease the block size if necessary

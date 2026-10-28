@@ -92,6 +92,7 @@ if __name__ == "__main__":
     gate_algebra = True
     freq_grad = False
     attention_type = "normal"
+    reg_loss_weight = 0.
 
     # run name
     if init_from == "scratch":
@@ -282,7 +283,8 @@ if __name__ == "__main__":
         gate_algebra=gate_algebra,
         freq_grad=freq_grad,
         attention_type=attention_type,
-        fox=fox
+        fox=fox,
+        reg_loss_weight=reg_loss_weight
     )  # start with model_args from command line
 
     if init_from == "scratch":
@@ -380,12 +382,15 @@ if __name__ == "__main__":
         model.eval()
         for split in ["train", "val"]:
             losses = torch.zeros(eval_iters)
+            losses_reg = torch.zeros(eval_iters)
             for k in range(eval_iters):
                 X, Y = get_batch(split)
                 with ctx:
-                    logits, loss = model(X, Y)
+                    logits, loss, loss_reg = model(X, Y)
                 losses[k] = loss.item()
+                losses_reg[k] = loss_reg.item()
             out[split] = losses.mean()
+            out[f"{split}_reg"] = losses_reg.mean()
         model.train()
         return out
 
@@ -450,6 +455,8 @@ if __name__ == "__main__":
                     "iter": iter_num,
                     "train/loss": losses["train"],
                     "val/loss": losses["val"],
+                    "train/loss_reg": losses["train_reg"],
+                    "val/loss_reg": losses["val_reg"],
                     "lr": lr,
                     "mfu": running_mfu * 100,  # convert to percentage
                 }
@@ -495,7 +502,8 @@ if __name__ == "__main__":
                     micro_step == gradient_accumulation_steps - 1
                 )
             with ctx:
-                logits, loss = model(X, Y)
+                logits, loss, loss_reg = model(X, Y)
+                loss = loss + reg_loss_weight * loss_reg
                 loss = (
                     loss / gradient_accumulation_steps
                 )  # scale the loss to account for gradient accumulation

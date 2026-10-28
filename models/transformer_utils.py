@@ -31,6 +31,7 @@ class DyT(nn.Module):
 class TransformerConfig:
     # transformer_type: str = "WM"    # WM or EM
     use_padding: bool = False
+    reg_loss_weight: float = 0.
     attention_type: str = "normal"  # "normal" or "ssm"
     base_scale_ngpt: float = 1.0 / (1024.0**0.5)
     position_ssm: bool = (

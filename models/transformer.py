@@ -85,8 +85,8 @@ class Transformer(nn.Module):
         out_dict_main = dict()
         for i, block in enumerate(self.blocks):
             x, out_dict = block(x, padding_mask, temperature=temperature)
-            # for k, v in out_dict.items():
-            #     out_dict_main[f"{k}_layer{str(i)}"] = v
+            for k, v in out_dict.items():
+                out_dict_main[f"{k}_layer{str(i)}"] = v
         
         # if temperature is not None:
         #     out_dict_main["temperature"] = temperature

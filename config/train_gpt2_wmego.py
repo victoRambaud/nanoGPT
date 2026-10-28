@@ -45,13 +45,14 @@ block_max_init: float = 1.0
 
 # egoformer
 commute = True
-rotate_values = False
+rotate_values = True
 ego2allo = True
 single_freq = True
 gate_algebra = True
 freq_grad = False
 attention_type = "normal"
 compile = True
+reg_loss_weight = 0.05
 
 # run name
 if init_from == "scratch":
