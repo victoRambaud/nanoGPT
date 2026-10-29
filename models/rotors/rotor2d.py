@@ -9,9 +9,16 @@ from models.transformer_utils import TransformerConfig
 def se2_motion_regularization(
     motion: torch.Tensor,
     head_angle: torch.Tensor,
+    reg_mode: str="quad"
 ) -> torch.Tensor:
-    translation = motion.pow(2).sum(dim=-1)
-    rotation = 4.0 * (1.0 - torch.cos(head_angle))
+    translation = 0.
+    if reg_mode == "sparse":
+        rotation = 2.0 * torch.sin(head_angle / 2.0).abs()
+    elif reg_mode == "quad":
+        rotation = 4.0 * (1.0 - torch.cos(head_angle))
+    elif reg_mode == "both":
+        rotation = 4.0 * (1.0 - torch.cos(head_angle))
+        translation = motion.pow(2).sum(dim=-1)
     return translation + rotation
 
 
