@@ -44,7 +44,7 @@ if __name__ == "__main__":
     wandb_run_name = ""
     ckpt_name = ""
     ckpt_path = ""
-    eval_interval = 2000
+    eval_interval = 250
     log_interval = 100
     eval_iters = 200
     eval_only = False  # if True, script exits right after the first eval
@@ -447,7 +447,7 @@ if __name__ == "__main__":
         if iter_num % eval_interval == 0 and master_process:
             losses = estimate_loss()
             print(
-                f"step {iter_num}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}"
+                f"step {iter_num}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f} reg loss {losses["train_reg"]:.4f}"
             )
             print(losses)
             if wandb_log:
