@@ -123,7 +123,7 @@ if __name__ == "__main__":
 
     # adamw optimizer
     learning_rate = 6e-4  # max learning rate
-    max_iters = 3000  # total number of training iterations
+    max_iters = 50000  # total number of training iterations
     weight_decay = 1e-1
     beta1 = 0.9
     beta2 = 0.95
