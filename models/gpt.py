@@ -88,7 +88,7 @@ class GPT(nn.Module):
         x, out_dict = self.transformer(x)
         x = self.ln_f(x)
 
-        loss_reg = 0.0
+        loss_reg = torch.tensor(0.0)
         if targets is not None:
             # if we are given some desired targets also calculate the loss
             logits = self.lm_head(x)
