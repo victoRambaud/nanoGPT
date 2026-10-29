@@ -54,11 +54,11 @@ if __name__ == "__main__":
 
     # wandb logging
     wandb_log = True  # disabled by default
-    wandb_project = "babylm"
+    wandb_project = "babyLM"
     wandb_mode = "offline"
 
     # data
-    dataset = "babylm"
+    dataset = "babyLM"
     gradient_accumulation_steps = 4  # used to simulate larger batch sizes
     batch_size = 16  # if gradient_accumulation_steps > 1, this is the micro-batch size
     block_size = 256
