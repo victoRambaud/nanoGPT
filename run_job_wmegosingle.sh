@@ -38,5 +38,5 @@ export PYTHONPATH=/lustre/fswork/projects/rech/fku/uir17ua/python_libs:$PYTHONPA
 # source activate mfa
 # set -x
 
-srun torchrun --standalone --nproc_per_node=4 \
+srun torchrun --standalone --nproc_per_node=1 \
     train.py config/train_gpt2_wmego.py
