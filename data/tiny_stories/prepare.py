@@ -8,6 +8,15 @@ import tiktoken
 from tqdm import tqdm
 from datasets import load_dataset
 
+base_dir = "/lustre/fswork/projects/rech/fku/uir17ua/data"
+
+os.environ["HF_HOME"] = base_dir
+os.environ["TIKTOKEN_CACHE_DIR"] = os.path.join(
+    base_dir, "tokenizer_cache"
+)
+
+import tiktoken
+
 
 # --------------------------------------------------
 # Configuration
