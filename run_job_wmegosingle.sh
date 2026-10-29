@@ -11,7 +11,7 @@
 
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
-#SBATCH --gres=gpu:1
+#SBATCH --gres=gpu:4
 
 #SBATCH --cpus-per-task=10
 ##SBATCH --cpus-per-task=3
@@ -38,5 +38,5 @@ export PYTHONPATH=/lustre/fswork/projects/rech/fku/uir17ua/python_libs:$PYTHONPA
 # source activate mfa
 # set -x
 
-srun torchrun --standalone --nproc_per_node=1 \
+srun torchrun --standalone --nproc_per_node=4 \
     train.py config/train_gpt2_wmego.py
