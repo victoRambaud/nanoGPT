@@ -9,17 +9,12 @@
 ##SBATCH --partition=gpu_p4
 #SBATCH -C h100
 
-#SBATCH --nodes=1
-#SBATCH --ntasks-per-node=1
-#SBATCH --gres=gpu:1
-
 #SBATCH --cpus-per-task=10
 ##SBATCH --cpus-per-task=3
 ##SBATCH --cpus-per-task=6
 ##SBATCH --cpus-per-task=8
 
 #SBATCH --hint=nomultithread
-
 
 #!/bin/bash
 #SBATCH --job-name=EgoNC
@@ -29,7 +24,7 @@
 
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --gres=gpu:4
+#SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=32
 #SBATCH --hint=nomultithread
 #SBATCH --time=00:30:00
