@@ -95,7 +95,17 @@ def get_source_files(repo_id: str, split: str) -> list[Path]:
 # -----------------------------------------------------------
 # Train tokenizer on TRAIN files only
 # -----------------------------------------------------------
-def prepare_tokenizer(train_paths: list[Path]) -> Tokenizer:
+def prepare_tokenizer(train_paths: list[Path], from_pretrained=False) -> Tokenizer:
+    if from_pretrained:
+        from transformers import AutoTokenizer
+        filename = ROOT / "tokenizer_pretrained.json"
+        repo = "BabyLM-community/BabyLM-2026-Baseline-GPT2-Strict-Small"
+
+        tokenizer = AutoTokenizer.from_pretrained(repo)
+        tokenizer.save_pretrained("data/babylm/tokenizer_official")
+
+        return tokenizer
+    
     filename = ROOT / "tokenizer.json"
     if filename.is_file() and not RETRAIN_TOKENIZER:
         print(f"Loading existing tokenizer: {filename}")
@@ -159,7 +169,7 @@ if __name__ == "__main__":
     train_files = get_source_files(TRAIN_REPO, "train")
     val_files = get_source_files(DEV_REPO, "val")
 
-    tokenizer = prepare_tokenizer(train_files)
+    tokenizer = prepare_tokenizer(train_files, from_pretrained=True)
     vocab_size = tokenizer.get_vocab_size()
     eot_id = tokenizer.token_to_id(EOT_TOKEN)
     assert eot_id is not None
