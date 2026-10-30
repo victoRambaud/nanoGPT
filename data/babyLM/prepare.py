@@ -61,7 +61,7 @@ PRETRAINED_REPO = (
     "BabyLM-2026-Baseline-GPT2-Strict-Small"
 )
 
-VOCAB_SIZE = 8192
+VOCAB_SIZE = 8192*2
 MIN_FREQUENCY = 2
 CUSTOM_EOS = "<|endoftext|>"
 
@@ -84,9 +84,7 @@ OFFLINE = os.environ.get(
     "BABYLM_OFFLINE", "0"
 ) == "1"
 
-RETRAIN_TOKENIZER = os.environ.get(
-    "BABYLM_RETRAIN_TOKENIZER", "0"
-) == "1"
+RETRAIN_TOKENIZER = False
 
 
 # -----------------------------------------------------------
