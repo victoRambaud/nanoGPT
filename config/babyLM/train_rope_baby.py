@@ -8,7 +8,7 @@ eval_iters = 50
 eval_only = False  # if True, script exits right after the first eval
 always_save_checkpoint = True  # if True, always save a checkpoint after each eval
 init_from = "scratch"  # 'scratch' or 'resume' or 'gpt2*'
-eval_blimp = False
+eval_blimp = True
 
 # wandb logging
 wandb_log = True  # disabled by default
