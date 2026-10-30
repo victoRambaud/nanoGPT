@@ -93,6 +93,7 @@ if __name__ == "__main__":
     freq_grad = False
     attention_type = "normal"
     reg_loss_weight = 0.
+    h2 = False
 
     # run name
     if init_from == "scratch":
@@ -286,7 +287,8 @@ if __name__ == "__main__":
         freq_grad=freq_grad,
         attention_type=attention_type,
         fox=fox,
-        reg_loss_weight=reg_loss_weight
+        reg_loss_weight=reg_loss_weight,
+        h2=h2
     )  # start with model_args from command line
 
     if init_from == "scratch":
