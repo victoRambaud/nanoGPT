@@ -1,3 +1,4 @@
+
 """
 This training script can be run both on a single gpu in debug mode,
 and also in a larger training run with distributed data parallel (ddp).
@@ -47,10 +48,12 @@ if __name__ == "__main__":
     eval_interval = 500
     log_interval = 50
     eval_iters = 50
+    eval_subsets = True
+    eval_subset_iters = 10
     eval_only = False  # if True, script exits right after the first eval
     always_save_checkpoint = True  # if True, always save a checkpoint after each eval
     init_from = "scratch"  # 'scratch' or 'resume' or 'gpt2*'
-    eval_blimp = False
+    eval_blimp = True
 
     # wandb logging
     wandb_log = True  # disabled by default
@@ -204,6 +207,12 @@ if __name__ == "__main__":
 
     # poor man's data loader
     data_dir = os.path.join("data", dataset)
+    val_subsets = sorted(
+        f[:-4] for f in os.listdir(data_dir)
+        if f.startswith("val_") and f.endswith(".bin")
+    )
+    if eval_subsets and not val_subsets:
+        raise FileNotFoundError(f"No val_<source>.bin found in {data_dir}")
 
 
     def get_batch(split: str, blk_sz: Optional[int]=None, btch_sz: Optional[int]=None) -> Tuple[torch.Tensor, torch.Tensor]:
@@ -216,12 +225,13 @@ if __name__ == "__main__":
 
         if split == "train":
             data = np.memmap(os.path.join(data_dir, "train.bin"), dtype=np.uint16, mode="r")
+        elif split in val_subsets:
+            data = np.memmap(os.path.join(data_dir, f"{split}.bin"), dtype=np.uint16, mode="r")
         else:
             if eval_mode == "pg19_normal":
                 data = np.memmap(os.path.join("/lustre/fswork/projects/rech/fku/uir17ua/dev/nanoGPT/data/pg19", "train_100.bin"), dtype=np.uint16, mode="r")
             else:
                 data = np.memmap(os.path.join(data_dir, "val.bin"), dtype=np.uint16, mode="r")
-        
         ix = torch.randint(len(data) - blk_sz, (btch_sz,))
         x = torch.stack(
             [torch.from_numpy((data[i : i + blk_sz]).astype(np.int64)) for i in ix]
@@ -256,7 +266,6 @@ if __name__ == "__main__":
         print(f"found vocab_size = {meta_vocab_size} (inside {meta_path})")
     if meta_vocab_size is None:
         raise FileNotFoundError(f"Missing BabyLM tokenizer metadata: {meta_path}")
-    
     model_args = dict(
         transformer_type=transformer_type,
         n_layer=n_layer,
@@ -350,7 +359,6 @@ if __name__ == "__main__":
     model.to(device)
 
     eval_mode = "blimp"
-    eval_blimp = False
     if eval_only:
         eval_blimp = True
 
@@ -377,7 +385,7 @@ if __name__ == "__main__":
     n_ds = 4 if not eval_only else None
     if eval_blimp:
         blimp_evaluator = BlimpEvaluator(
-            model=model,
+            model=model.module if ddp else model,
             device=device,
             max_seq_len=block_size,
             n_datasets=n_ds
@@ -386,19 +394,21 @@ if __name__ == "__main__":
     @torch.no_grad()
     def estimate_loss() -> Dict:
         out = {}
-        model.eval()
-        for split in ["train", "val"]:
-            losses = torch.zeros(eval_iters)
-            losses_reg = torch.zeros(eval_iters)
-            for k in range(eval_iters):
+        eval_model = model.module if ddp else model
+        eval_model.eval()
+        for split in ["train", "val"] + (val_subsets if eval_subsets else []):
+            n_iters = eval_subset_iters if split in val_subsets else eval_iters
+            losses = torch.zeros(n_iters)
+            losses_reg = torch.zeros(n_iters)
+            for k in range(n_iters):
                 X, Y = get_batch(split)
                 with ctx:
-                    logits, loss, loss_reg = model(X, Y)
+                    logits, loss, loss_reg = eval_model(X, Y)
                 losses[k] = loss.item()
                 losses_reg[k] = loss_reg.item()
             out[split] = losses.mean()
             out[f"{split}_reg"] = losses_reg.mean()
-        model.train()
+        eval_model.train()
         return out
 
 
@@ -413,15 +423,14 @@ if __name__ == "__main__":
         # 3) in between, use cosine decay down to min learning rate
         decay_ratio = (it - warmup_iters) / (lr_decay_iters - warmup_iters)
         assert 0 <= decay_ratio <= 1
-        coeff = 0.5 * (1.0 + math.cos(math.pi * decay_ratio))  # coeff ranges 0..1
+        coeff = 0.5 * (1.0 + math.cos(math.pi * decay_ratio))  # coeff ranges from 0 to 1
         return min_lr + coeff * (learning_rate - min_lr)
 
-    
     # logging
     if wandb_log and master_process:
         import wandb
         if not eval_only:
-            wandb_run_name = wandb_run_name + f"id_{random.randint(0, 1000)}" 
+            wandb_run_name = wandb_run_name + f"id_{random.randint(0, 1000)}"
         else:
             wandb_run_name = f"full_{eval_mode}_eval_{wandb_run_name}"
 
@@ -533,8 +542,8 @@ if __name__ == "__main__":
         dt = t1 - t0
         t0 = t1
         if iter_num % log_interval == 0 and master_process:
-            # get loss as float. note: this is a CPU-GPU sync point
-            # scale up to undo the division above, approximating the true total loss (exact would have been a sum)
+        # get loss as float. note: this is a CPU-GPU sync point
+        # scale up to undo the division above, approximating the true total loss (exact would have been a sum)
             lossf = loss.item() * gradient_accumulation_steps
             if local_iter_num >= 5:  # let the training loop settle a bit
                 mfu = raw_model.estimate_mfu(batch_size * gradient_accumulation_steps, dt)
@@ -545,7 +554,7 @@ if __name__ == "__main__":
         iter_num += 1
         local_iter_num += 1
 
-        # termination conditions
+# termination conditions
         if iter_num > max_iters:
             break
 
