@@ -193,14 +193,14 @@ class CausalSelfAttention(nn.Module):
         out_dict: Dict,
         q_x: Optional[torch.Tensor] = None
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, Dict, Dict, Dict]:
-        thetaS, _, th, rot_dict = self.rotation_module(x)
-        q, k = self.rotation_module.rotate_qk(thetaS, q, k)
+        rot_matrix, _, th, rot_dict = self.rotation_module(x)
+        q, k = self.rotation_module.rotate_qk(rot_matrix, q, k, mode="sin")
         if self.config.rotate_values:
             # rotate each value by the inverse heading (which is what value_rotation returns)
             # each value is seen as if from canonical heading, all are comparable
-            rot = self.rotation_module.mat_inverse(rot_dict)
+            rot_value = self.rotation_module.mat_inverse(rot_dict)
             v, _ = self.rotation_module.rotate_qk(
-                rot, v
+                rot_value, v
             )
         # q, k, theta, th, (tt, ttt), rot_dict = self.rotate_qk(x, q, k)
         for ke, va in rot_dict.items():

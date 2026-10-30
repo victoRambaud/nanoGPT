@@ -236,7 +236,7 @@ class RotationModule(nn.Module):
         rot_matrix: torch.Tensor,
         q: torch.Tensor,
         k: Optional[torch.Tensor] = None,
-        mode: str = "sin"
+        mode: Optional[str] = None
         # self, theta: torch.Tensor, q: torch.Tensor, k: torch.Tensor
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """Rotate queries and keys by an angle of theta, using exponential of matrix S
@@ -250,11 +250,12 @@ class RotationModule(nn.Module):
             Tuple[torch.Tensor, torch.Tensor]: _description_
         """
         b, l, nh, _ = q.shape
+        mode = mode if mode is not None else self.rotation_mode
         q = q.view(b, l, nh, self.config.n_diag_blocks, self.config.diag_block_size)
         if k is not None:
             k = k.view(b, l, nh, self.config.n_diag_blocks, self.config.diag_block_size)
 
-        if self.rotation_mode == "sin":
+        if mode == "sin":
             cos = rot_matrix[0].unsqueeze(-1)
             sin = rot_matrix[1].unsqueeze(-1)
 
@@ -273,7 +274,7 @@ class RotationModule(nn.Module):
             q = fast_rotate(q)
             if k is not None:
                 k = fast_rotate(k)
-        elif self.rotation_mode == "quat":
+        elif mode == "quat":
             q = self.theta_embedd.rotate_vector(rot_matrix, q).view(b, l, nh, -1)
             if k is not None:
                 k = self.theta_embedd.rotate_vector(rot_matrix, k).view(b, l, nh, -1)
@@ -373,3 +374,152 @@ def decaying_frequencies(max_freq, dim, decay=0.5, device=None):
 
     return freqs, counts
 
+
+class Ego2AlloEmbedder(nn.Module):
+    def __init__(self, config: TransformerConfig):
+        super().__init__()
+        self.config = config
+        self.rank = config.dt_rank
+        self.n_angles = self.rank * (self.rank - 1) // 2
+        
+        if self.config.norm_velocities:
+            self.angular_embed = nn.Sequential(
+                nn.Linear(
+                    config.n_embd, config.n_head * self.n_angles, bias=False
+                ),
+                nn.RMSNorm(config.n_head * self.n_angles)
+            )
+            self.allocentric_velocity = nn.Sequential(
+                nn.Linear(
+                    config.n_embd, config.n_head * self.rank, bias=False
+                ),
+                nn.RMSNorm(config.n_head * self.rank)
+            )
+        else:
+            self.angular_embed = nn.Linear(
+                config.n_embd, config.n_head * (self.n_angles), bias=False
+            )
+            self.allocentric_velocity = nn.Linear(
+                config.n_embd, config.n_head * (self.rank), bias=False
+            )
+
+        self.angle_scale = nn.Linear(1, config.n_diag_blocks)
+        self.out_proj = nn.Linear(self.rank, config.n_diag_blocks, bias=False)
+
+        if config.gate_algebra:
+            self.head_algebra_gate = nn.Sequential(
+                nn.Linear(config.n_embd, config.n_head, bias=False),
+                nn.Sigmoid()
+            )
+            self.value_gate = nn.Sequential(
+                nn.Linear(config.n_embd, config.n_head, bias=False),
+                nn.Sigmoid()
+            )
+
+        if config.rotate_values:
+            _, value_freqs = init_rotation_matrix(config, base_freq=config.value_base_freq, follow_rank=False)
+            if config.single_freq:
+                self.value_freqs = nn.Parameter(
+                    torch.ones_like(value_freqs).squeeze(-1).unsqueeze(0).unsqueeze(0).unsqueeze(0).repeat(1, 1, config.n_head, 1),
+                    requires_grad=config.freq_grad
+                )
+            elif config.zero_freqs:
+                _, value_freqs = init_rotation_matrix(config, base_freq=config.value_base_freq, follow_rank=False, config_blocks=config.n_diag_blocks//2)
+                value_freqs = torch.concat([value_freqs, torch.zeros_like(value_freqs)])
+                self.value_freqs = nn.Parameter(
+                    value_freqs.squeeze(-1).unsqueeze(0).unsqueeze(0).unsqueeze(0).repeat(1, 1, config.n_head, 1).log(),
+                    requires_grad=True
+                )
+            elif config.integer_freqs:
+                value_freqs, _ = decaying_frequencies(3, dim=config.head_dim)
+                self.value_freqs = nn.Parameter(
+                    value_freqs.squeeze(-1).unsqueeze(0).unsqueeze(0).unsqueeze(0).repeat(1, 1, config.n_head, 1),
+                    requires_grad=False
+                )
+            else:
+                self.value_freqs = nn.Parameter(
+                    value_freqs.squeeze(-1).unsqueeze(0).unsqueeze(0).unsqueeze(0).repeat(1, 1, config.n_head, 1).log(),
+                    requires_grad=True
+                )
+            
+
+    def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor]:
+        
+        b, l, d = x.size()
+        raw_angular_velocity = self.angular_embed(x).view(
+            b, l, self.config.n_head
+        )  # (b, l, n_head * 3)
+
+        angular_velocity = raw_angular_velocity
+        if self.config.gate_algebra:
+            head_gate = self.head_algebra_gate(x)
+            value_gate = self.value_gate(x)
+            head_angular_velocity = angular_velocity * head_gate
+            value_angular_velocity = angular_velocity * value_gate
+        else:
+            head_angular_velocity = angular_velocity
+            value_angular_velocity = angular_velocity
+        movement_magnitude = self.allocentric_velocity(x).view(
+            b, l, self.config.n_head, -1
+        )  # (b, l, n_head * 3)        
+
+        # velocities_norms = (2*(angular_velocity/2).sin().abs()).sum(dim=-1).mean(dim=1).mean()
+        # velocities_norms = se2_twist_penalty(
+        #     v=movement_magnitude,
+        #     w=angular_velocity,
+        #     reduction=None,
+        #     mode="joint"
+        # )
+        # velocities_norms = velocities_norms.sum(dim=-1).mean()
+        velocities_norms = se2_motion_regularization(movement_magnitude, angular_velocity)
+        if self.config.full_ego_path:
+            head_angle = head_angular_velocity.cumsum(dim=1)  # (b, l, n_head)
+        else:
+            # TODO rotation by angular velocity probably needed after retrieval
+            head_angle = (
+                angular_velocity.cumsum(dim=1) - angular_velocity
+            )  # (b, l, n_head)
+        head_angle = head_angle % (2 * math.pi)
+        cos_theta = torch.cos(head_angle)  # (b, l, n_head)
+        sin_theta = torch.sin(head_angle)  # (b, l, n_head)
+
+        vx = movement_magnitude[..., 0]
+        vy = movement_magnitude[..., 1]
+        
+        vx_allo = vx * cos_theta - vy * sin_theta
+        vy_allo = vx * sin_theta + vy * cos_theta
+
+        allocentric_velocity = torch.stack(
+            [vx_allo, vy_allo], dim=-1
+        )  # (b, l, n_head, 2)
+
+        allo_velocity = self.out_proj(allocentric_velocity)
+
+        value_rotation = None
+        if self.config.rotate_values:
+            if not self.config.full_ego_path:
+                head_angle = head_angle + angular_velocity
+            head_angle = value_angular_velocity.cumsum(dim=1)
+
+            # ##### USE ONLY FOR CAUSAL INTERVENTION ON FRAMES #####
+            # print("change 3")
+            # head_angle[:, [1, 3]] = head_angle[:, [3, 1]]
+            
+            head_angle = self.angle_scale(head_angle.unsqueeze(-1))
+
+            if self.config.integer_freqs:
+                value_freqs = self.value_freqs
+            else:
+                value_freqs = self.value_freqs.exp()
+            
+            cos_head = torch.cos(value_freqs * head_angle)
+            sin_head = torch.sin(value_freqs * head_angle)
+            value_rotation = (cos_head, sin_head)
+        return allo_velocity, {
+            "activity_norm": velocities_norms,
+            "value_rotation": value_rotation,
+            "allo_velocity": allocentric_velocity,
+            "max_angle": head_angle.abs().max().item(),
+            "min_angle": head_angle.abs().max().item(),
+            "head_angle": angular_velocity
+        }

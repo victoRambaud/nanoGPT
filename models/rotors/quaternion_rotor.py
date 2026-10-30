@@ -244,6 +244,7 @@ class QuaternionRotor(nn.Module):
         # rotate motion in N = IR^3 by the path-integrated quaternions/head rotations
         allo_velocity = quaternion_rotate(q_pi_allo, movement_magnitude)
         # broadcast to blocks, for the actual motion in N per frequency
+        # allocentric_velocity = allo_velocity
         allocentric_velocity = self.out_proj(allo_velocity)
         
         if self.config.rotate_values and self.config.freq_grad:
@@ -259,9 +260,11 @@ class QuaternionRotor(nn.Module):
             )
 
         # [B, L, H, K, 4]
+        rotation_norm = (
+            8.0 * delta_q[..., 1:].square().sum(dim=-1)
+        )
         return allocentric_velocity, {
+            "activity_norm_lie_algebra": rotation_norm,
             "value_rotation": q,
             "allo_velocity": allo_velocity
         }
-
-
