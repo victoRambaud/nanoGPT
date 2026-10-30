@@ -79,6 +79,7 @@ if __name__ == "__main__":
     follow_rank: bool = True
     shared_inner_theta: bool = False
     transformer_type = "WM"
+    ssm_attn = ""   # gdn2
     dt_rank: int = 2
     base_freq = 256
     block_max_init: float = 1.0
@@ -288,7 +289,8 @@ if __name__ == "__main__":
         attention_type=attention_type,
         fox=fox,
         reg_loss_weight=reg_loss_weight,
-        h2=h2
+        h2=h2,
+        ssm_attn=ssm_attn
     )  # start with model_args from command line
 
     if init_from == "scratch":

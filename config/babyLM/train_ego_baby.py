@@ -22,9 +22,9 @@ batch_size = 16  # if gradient_accumulation_steps > 1, this is the micro-batch s
 block_size = 256
 
 # model
-n_layer = 4
+n_layer = 2
 head_dim = 64
-n_embd = 256
+n_embd = 128
 dropout = 0.1  # small-data regularization for BabyLM
 bias = False  # do we use bias inside LayerNorm and Linear layers?
 rope: bool = False
@@ -50,7 +50,7 @@ single_freq = True
 gate_algebra = True
 freq_grad = False
 attention_type = "normal"
-reg_loss_weight = 0.05
+reg_loss_weight = 0.01
 
 # run name
 if init_from == "scratch":
@@ -81,7 +81,7 @@ if init_from == "scratch":
 
 # adamw optimizer
 learning_rate = 6e-4  # max learning rate
-max_iters = 50000  # total number of training iterations
+max_iters = 200000  # total number of training iterations
 weight_decay = 1e-1
 beta1 = 0.9
 beta2 = 0.95
@@ -89,6 +89,6 @@ grad_clip = 1.0  # clip gradients at this value, or disable if == 0.0
 
 # learning rate decay settings
 decay_lr = True  # whether to decay the learning rate
-warmup_iters = 100  # how many steps to warm up for
-lr_decay_iters = 50000  # should be ~= max_iters
-min_lr = 6e-5  # minimum learning rate, should be ~= learning_rate/10
+warmup_iters = 40000  # how many steps to warm up for
+lr_decay_iters = 200000  # should be ~= max_iters
+min_lr = 1e-4  # minimum learning rate, should be ~= learning_rate/10
