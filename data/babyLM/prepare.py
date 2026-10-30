@@ -68,6 +68,7 @@ CUSTOM_EOS = "<|endoftext|>"
 TOKENIZER_MODE = os.environ.get(
     "BABYLM_TOKENIZER", "custom"
 ).lower()
+TOKENIZER_MODE = "pretrained"
 
 if TOKENIZER_MODE not in {"custom", "pretrained"}:
     raise ValueError(
