@@ -22,14 +22,14 @@ batch_size = 16  # if gradient_accumulation_steps > 1, this is the micro-batch s
 block_size = 256
 
 # model
-n_layer = 2
+n_layer = 6
 head_dim = 64
-n_embd = 128
+n_embd = 512
 dropout = 0.1  # small-data regularization for BabyLM
 bias = False  # do we use bias inside LayerNorm and Linear layers?
 rope: bool = True
 cope: bool = False
-fox: bool = True
+fox: bool = False
 working_memory: bool = False
 episodic_memory: bool = False
 n_episodic_memory: bool = False
