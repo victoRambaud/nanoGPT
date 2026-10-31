@@ -206,7 +206,8 @@ class RotationModule(nn.Module):
                 self.theta_embedd = QuaternionRotor(config)
             else:
                 self.theta_embedd = EgoNDimEmbedder(config=config)
-        self.theta_embedd = ThetaEmbedder(config)
+        else:
+            self.theta_embedd = ThetaEmbedder(config)
 
         self.n_torus_blocks = config.head_dim // 2
         self.torus_block_size = 2
