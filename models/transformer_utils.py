@@ -136,6 +136,7 @@ class TransformerConfig:
     same_gqk: bool = False
     fox: bool = False
     h2: bool = False
+    reg_mode : str = "quad"
 
     softmax_log_norm: bool = False
 

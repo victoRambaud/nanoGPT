@@ -382,7 +382,7 @@ if __name__ == "__main__":
     # wrap model into DDP container
     if ddp:
         model = DDP(model, device_ids=[ddp_local_rank])
-    n_ds = 4 if not eval_only else None
+    n_ds = 20 if not eval_only else None
     if eval_blimp:
         blimp_evaluator = BlimpEvaluator(
             model=model.module if ddp else model,
@@ -447,7 +447,7 @@ if __name__ == "__main__":
     running_mfu = -1.0
     while True:
 
-        if eval_blimp and iter_num % (2*eval_interval) == 0 and master_process:
+        if eval_blimp and iter_num % (20*eval_interval) == 0 and master_process:
             blimp_results = blimp_evaluator.evaluate_blimp_all(subsets_contains=None)
             if wandb_log:
                 wandb.log(

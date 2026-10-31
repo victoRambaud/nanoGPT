@@ -50,7 +50,7 @@ single_freq = True
 gate_algebra = True
 freq_grad = False
 attention_type = "normal"
-reg_loss_weight = 0.01
+reg_loss_weight = 0.0001
 
 # run name
 if init_from == "scratch":

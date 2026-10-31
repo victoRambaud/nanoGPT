@@ -93,11 +93,11 @@ class Rotor2D(nn.Module):
         )
 
         # Projection into N
-        self.out_proj = nn.Linear(
-            2,
-            self.n_blocks,
-            bias=False,
-        )
+        # self.out_proj = nn.Linear(
+        #     2,
+        #     self.n_blocks,
+        #     bias=False,
+        # )
 
         if config.gate_algebra:
             # H1 gate, acting on both N and V1 (or all V)
@@ -209,7 +209,8 @@ class Rotor2D(nn.Module):
             dim=-1,
         )
 
-        allocentric_velocity = self.out_proj(allo_velocity)
+        allocentric_velocity = allo_velocity
+        # allocentric_velocity = self.out_proj(allo_velocity)
 
         value_rotation = None
 
@@ -241,6 +242,7 @@ class Rotor2D(nn.Module):
         velocities_norms = se2_motion_regularization(
             movement_magnitude,
             angular_velocity,
+            reg_mode=self.config.reg_mode
         )
 
         if self.use_h2:

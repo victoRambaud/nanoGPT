@@ -4,7 +4,7 @@ import torch.nn.functional as F
 
 import torch_parallel_scan as tps
 
-from models.transformer_utils import TransformerConfig, init_rotation_matrix
+from models.transformer_utils import TransformerConfig
 
 
 def rotvec_to_quaternion(r: torch.Tensor, eps=1e-8) -> torch.Tensor:
@@ -173,7 +173,7 @@ class QuaternionRotor(nn.Module):
             config.n_embd, config.n_head * (config.dt_rank), bias=False
         )
 
-        self.out_proj = nn.Linear(config.dt_rank, config.n_diag_blocks, bias=False)
+        # self.out_proj = nn.Linear(config.dt_rank, config.n_diag_blocks, bias=False)
 
         if config.rotate_values and config.freq_grad:
             self.log_freq = nn.Parameter(
@@ -244,8 +244,8 @@ class QuaternionRotor(nn.Module):
         # rotate motion in N = IR^3 by the path-integrated quaternions/head rotations
         allo_velocity = quaternion_rotate(q_pi_allo, movement_magnitude)
         # broadcast to blocks, for the actual motion in N per frequency
-        # allocentric_velocity = allo_velocity
-        allocentric_velocity = self.out_proj(allo_velocity)
+        allocentric_velocity = allo_velocity
+        # allocentric_velocity = self.out_proj(allo_velocity)
         
         if self.config.rotate_values and self.config.freq_grad:
             omega = self.log_freq.exp()[None, None, :, :, None]
